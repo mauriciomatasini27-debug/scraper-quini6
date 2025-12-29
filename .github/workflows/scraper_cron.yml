@@ -54,14 +54,18 @@ jobs:
             echo "Supabase URL configurada"
           fi
 
+      - name: 📥 Crear directorio data
+        run: mkdir -p data
+
       - name: 📥 Descargar artifact más reciente (si existe)
-        uses: dawidd6/action-download-artifact@v3
+        uses: actions/download-artifact@v4
         continue-on-error: true
+        id: download-artifact
         with:
-          workflow: scraper_cron.yml
-          name: resultados-quini6-*
+          pattern: resultados-quini6-*
+          merge-multiple: true
           path: data/
-          if_no_artifact_found: ignore
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🏗️ Compilar TypeScript
         run: npm run build
