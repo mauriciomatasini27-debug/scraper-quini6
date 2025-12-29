@@ -60,12 +60,9 @@ jobs:
       - name: 📥 Descargar artifact más reciente (si existe)
         uses: actions/download-artifact@v4
         continue-on-error: true
-        id: download-artifact
         with:
-          pattern: resultados-quini6-*
-          merge-multiple: true
+          name: resultados-quini6-latest
           path: data/
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🏗️ Compilar TypeScript
         run: npm run build
@@ -92,6 +89,16 @@ jobs:
           name: resultados-quini6-${{ github.run_number }}
           path: data/*.json
           retention-days: 90
+          if-no-files-found: ignore
+
+      - name: 📤 Guardar artifact con nombre fijo (para próxima ejecución)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-quini6-latest
+          path: data/*.json
+          retention-days: 90
+          if-no-files-found: ignore
 
       - name: 📊 Resumen de resultados
         if: always()
