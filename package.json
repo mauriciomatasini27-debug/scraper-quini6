@@ -1,0 +1,39 @@
+{
+  "name": "scraper-quini6-2025",
+  "version": "1.0.0",
+  "description": "Scraper para extraer todos los resultados del Quini 6 del año 2025",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "scrape": "npm run build && npm run start",
+    "scrape:2024": "npm run build && node dist/index-2024.js",
+    "scrape:2025": "npm run build && node dist/index.js 2025",
+    "scrape:multi": "npm run build && node dist/index-multi-year.js",
+    "scrape:2020-2023": "npm run scrape:multi",
+    "scheduler": "npm run build && node dist/index-scheduler.js",
+    "scheduler:dev": "ts-node src/index-scheduler.ts"
+  },
+  "keywords": [
+    "scraper",
+    "quini6",
+    "typescript",
+    "playwright",
+    "github-actions",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/node-cron": "^3.0.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
+

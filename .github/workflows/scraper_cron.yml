@@ -1,0 +1,100 @@
+name: Quini 6 Scraper Automático
+
+on:
+  # Ejecutar los miércoles y domingos a las 21:00 hora Argentina (ARG)
+  # Argentina está en UTC-3, así que 21:00 ARG = 00:00 UTC (del día siguiente)
+  # Para ejecutar el miércoles a las 21:00 ARG, usamos jueves 00:00 UTC
+  # Para ejecutar el domingo a las 21:00 ARG, usamos lunes 00:00 UTC
+  schedule:
+    # Miércoles 21:00 ARG = Jueves 00:00 UTC (1.5 horas después del sorteo a las 19:30)
+    - cron: '0 0 * * 4'  # Jueves 00:00 UTC = Miércoles 21:00 ARG
+    # Domingo 21:00 ARG = Lunes 00:00 UTC
+    - cron: '0 0 * * 1'  # Lunes 00:00 UTC = Domingo 21:00 ARG
+  
+  # Permitir ejecución manual desde GitHub Actions
+  workflow_dispatch:
+    inputs:
+      año:
+        description: 'Año a procesar (dejar vacío para año actual)'
+        required: false
+        type: string
+
+jobs:
+  scrape-quini6:
+    name: Extraer Resultados Quini 6
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: 🎭 Instalar Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: 🔐 Configurar variables de entorno
+        env:
+          CRAWLBASE_JS_TOKEN: ${{ secrets.CRAWLBASE_JS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "Variables de entorno configuradas"
+          if [ -n "$CRAWLBASE_JS_TOKEN" ]; then
+            echo "Crawlbase token configurado"
+          fi
+          if [ -n "$SUPABASE_URL" ]; then
+            echo "Supabase URL configurada"
+          fi
+
+      - name: 🏗️ Compilar TypeScript
+        run: npm run build
+
+      - name: 🎯 Ejecutar Scraper
+        env:
+          CRAWLBASE_JS_TOKEN: ${{ secrets.CRAWLBASE_JS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          AÑO: ${{ github.event.inputs.año || '' }}
+        run: |
+          if [ -n "$AÑO" ]; then
+            echo "Ejecutando scraper para el año $AÑO"
+            node dist/index.js $AÑO
+          else
+            echo "Ejecutando scraper para el año actual"
+            node dist/index.js
+          fi
+
+      - name: 📤 Subir resultados a artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-quini6-${{ github.run_number }}
+          path: data/*.json
+          retention-days: 90
+
+      - name: 📊 Resumen de resultados
+        if: always()
+        run: |
+          echo "## 📊 Resultados del Scraping" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Fecha de ejecución:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -d "data" ] && [ "$(ls -A data/*.json 2>/dev/null)" ]; then
+            echo "### 📁 Archivos generados:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            ls -lh data/*.json | awk '{print $9 " - " $5}' >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No se generaron archivos nuevos" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Workflow completado exitosamente" >> $GITHUB_STEP_SUMMARY
+
