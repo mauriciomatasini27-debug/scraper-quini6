@@ -54,10 +54,19 @@ jobs:
             echo "Supabase URL configurada"
           fi
 
+      - name: 📥 Descargar artifact más reciente (si existe)
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: scraper_cron.yml
+          name: resultados-quini6-*
+          path: data/
+          if_no_artifact_found: ignore
+
       - name: 🏗️ Compilar TypeScript
         run: npm run build
 
-      - name: 🎯 Ejecutar Scraper
+      - name: 🎯 Ejecutar Scraper (Modo Incremental)
         env:
           CRAWLBASE_JS_TOKEN: ${{ secrets.CRAWLBASE_JS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -65,11 +74,11 @@ jobs:
           YEAR: ${{ github.event.inputs.year || '' }}
         run: |
           if [ -n "$YEAR" ]; then
-            echo "Ejecutando scraper para el año $YEAR"
-            node dist/index.js $YEAR
+            echo "🔄 Ejecutando scraper incremental para el año $YEAR"
+            node dist/index-incremental.js $YEAR
           else
-            echo "Ejecutando scraper para el año actual"
-            node dist/index.js
+            echo "🔄 Ejecutando scraper incremental para el año actual"
+            node dist/index-incremental.js
           fi
 
       - name: 📤 Subir resultados a artifacts
