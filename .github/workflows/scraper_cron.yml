@@ -14,7 +14,7 @@ on:
   # Permitir ejecución manual desde GitHub Actions
   workflow_dispatch:
     inputs:
-      año:
+      year:
         description: 'Año a procesar (dejar vacío para año actual)'
         required: false
         type: string
@@ -62,11 +62,11 @@ jobs:
           CRAWLBASE_JS_TOKEN: ${{ secrets.CRAWLBASE_JS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          AÑO: ${{ github.event.inputs.año || '' }}
+          YEAR: ${{ github.event.inputs.year || '' }}
         run: |
-          if [ -n "$AÑO" ]; then
-            echo "Ejecutando scraper para el año $AÑO"
-            node dist/index.js $AÑO
+          if [ -n "$YEAR" ]; then
+            echo "Ejecutando scraper para el año $YEAR"
+            node dist/index.js $YEAR
           else
             echo "Ejecutando scraper para el año actual"
             node dist/index.js
