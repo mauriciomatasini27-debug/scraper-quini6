@@ -23,17 +23,29 @@ async function obtenerSorteosNuevos(
   let sorteosExistentes: Set<number> = new Set();
   let resultadoExistente: ResultadoScraping | null = null;
   
+  console.log(`🔍 Buscando archivo en: ${archivoPath}`);
+  
   if (fs.existsSync(archivoPath)) {
     try {
       const contenido = fs.readFileSync(archivoPath, 'utf-8');
       resultadoExistente = JSON.parse(contenido) as ResultadoScraping;
       sorteosExistentes = new Set(resultadoExistente.sorteos.map(s => s.numeroSorteo));
-      console.log(`📄 Archivo existente encontrado con ${resultadoExistente.sorteos.length} sorteos`);
+      console.log(`✅ Archivo existente encontrado con ${resultadoExistente.sorteos.length} sorteos`);
+      console.log(`📊 Sorteos existentes: ${Array.from(sorteosExistentes).slice(0, 5).join(', ')}${sorteosExistentes.size > 5 ? '...' : ''}`);
     } catch (error) {
-      console.warn('⚠️  Error al leer archivo existente, se procesará todo el año');
+      console.warn('⚠️  Error al leer archivo existente:', error);
+      console.warn('⚠️  Se procesará todo el año');
     }
   } else {
-    console.log('📄 No se encontró archivo existente, se procesará todo el año');
+    console.log('⚠️  No se encontró archivo existente en:', archivoPath);
+    console.log('⚠️  Se procesará todo el año (primera ejecución o artifact no descargado)');
+    
+    // Listar archivos en data/ para debugging
+    const dataDir = path.join(process.cwd(), 'data');
+    if (fs.existsSync(dataDir)) {
+      const archivos = fs.readdirSync(dataDir);
+      console.log(`📁 Archivos encontrados en data/: ${archivos.join(', ') || 'ninguno'}`);
+    }
   }
 
   // Obtener todos los sorteos del año

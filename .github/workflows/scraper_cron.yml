@@ -60,9 +60,26 @@ jobs:
       - name: 📥 Descargar artifact más reciente (si existe)
         uses: actions/download-artifact@v4
         continue-on-error: true
+        id: download-artifact
         with:
           name: resultados-quini6-latest
           path: data/
+
+      - name: 📋 Verificar archivos descargados
+        run: |
+          echo "Verificando archivos en data/..."
+          if [ -d "data" ]; then
+            echo "📁 Contenido del directorio data:"
+            ls -la data/ || echo "Directorio data vacío o no existe"
+            if [ -f "data/quini_2025_completo.json" ]; then
+              echo "✅ Archivo quini_2025_completo.json encontrado"
+              echo "📊 Tamaño: $(du -h data/quini_2025_completo.json | cut -f1)"
+            else
+              echo "⚠️  Archivo quini_2025_completo.json NO encontrado - se procesará todo el año"
+            fi
+          else
+            echo "⚠️  Directorio data no existe - se procesará todo el año"
+          fi
 
       - name: 🏗️ Compilar TypeScript
         run: npm run build
