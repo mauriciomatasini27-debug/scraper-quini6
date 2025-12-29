@@ -59,10 +59,13 @@ async function obtenerSorteosNuevos(
 
     if (sorteosNuevos.length > 0) {
       console.log(`\n🆕 Se encontraron ${sorteosNuevos.length} sorteo(s) nuevo(s)`);
+      console.log(`📊 Sorteos nuevos: ${sorteosNuevos.map(s => s.numeroSorteo).join(', ')}`);
       
       // Combinar sorteos existentes con nuevos
       const todosLosSorteos = [...resultadoExistente.sorteos, ...sorteosNuevos];
       todosLosSorteos.sort((a, b) => a.numeroSorteo - b.numeroSorteo);
+      
+      console.log(`\n💾 Combinando sorteos: ${resultadoExistente.sorteos.length} existentes + ${sorteosNuevos.length} nuevos = ${todosLosSorteos.length} total`);
 
       // Crear resultado actualizado
       const resultadoActualizado: ResultadoScraping = {
@@ -117,8 +120,10 @@ async function main() {
       const reporte = validador.generarReporte(validacion);
       console.log(reporte);
 
-      // Guardar resultados en archivo JSON
+      // Guardar resultados en archivo JSON (incluye todos los sorteos: existentes + nuevos)
+      console.log(`\n💾 Guardando archivo JSON con TODOS los sorteos (existentes + nuevos)...`);
       await scraper.guardarResultados(resultado);
+      console.log(`✅ Archivo guardado con ${resultado.totalSorteos} sorteos en total`);
 
       // Guardar en Supabase si está configurado
       const guardadoEnSupabase = await guardarEnSupabaseBatch(resultado);
@@ -128,7 +133,13 @@ async function main() {
 
       console.log('\n✅ Proceso incremental completado exitosamente!');
       console.log(`📊 Resumen:`);
-      console.log(`   - Total de sorteos en archivo: ${resultado.totalSorteos}`);
+      console.log(`   - Total de sorteos en archivo JSON: ${resultado.totalSorteos}`);
+      if (sorteosExistentesCount > 0) {
+        console.log(`   - Sorteos existentes: ${sorteosExistentesCount}`);
+        console.log(`   - Sorteos nuevos agregados: ${resultado.totalSorteos - sorteosExistentesCount}`);
+      } else {
+        console.log(`   - Todos los sorteos son nuevos (primera ejecución)`);
+      }
       console.log(`   - Validación: ${validacion.valido ? '✅ Válido' : '⚠️  Con problemas'}`);
     } else {
       console.log('\n✅ No hay sorteos nuevos para procesar');
