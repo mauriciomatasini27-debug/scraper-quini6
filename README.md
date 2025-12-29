@@ -182,6 +182,20 @@ Ver [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md) para instrucciones deta
 
 Si quieres almacenar los datos en Supabase, sigue la guía en [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) para configurar la base de datos.
 
+### 📥 Importar Datos Históricos a Supabase
+
+Para importar todos los datos históricos (2020-2025) desde los archivos JSON a Supabase:
+
+1. Configura las variables de entorno (ver `.env.example`)
+2. Crea la tabla en Supabase (ver [src/scripts/README.md](./src/scripts/README.md))
+3. Ejecuta el script de importación:
+
+```bash
+npm run import:history
+```
+
+Ver [src/scripts/README.md](./src/scripts/README.md) para más detalles.
+
 ### Configuración del Scraper
 
 El scraper incluye las siguientes configuraciones por defecto:

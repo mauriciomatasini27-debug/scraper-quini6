@@ -13,7 +13,9 @@
     "scrape:multi": "npm run build && node dist/index-multi-year.js",
     "scrape:2020-2023": "npm run scrape:multi",
     "scheduler": "npm run build && node dist/index-scheduler.js",
-    "scheduler:dev": "ts-node src/index-scheduler.ts"
+    "scheduler:dev": "ts-node src/index-scheduler.ts",
+    "import:history": "npm run build && node dist/scripts/importHistory.js",
+    "import:history:dev": "ts-node src/scripts/importHistory.ts"
   },
   "keywords": [
     "scraper",
@@ -26,8 +28,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "playwright": "^1.40.0",
-    "node-cron": "^3.0.3"
+    "@supabase/supabase-js": "^2.89.0",
+    "node-cron": "^3.0.3",
+    "playwright": "^1.40.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -36,4 +39,3 @@
     "typescript": "^5.3.3"
   }
 }
-
