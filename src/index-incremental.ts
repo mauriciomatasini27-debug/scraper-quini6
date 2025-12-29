@@ -107,10 +107,23 @@ async function main() {
   const validador = new ValidadorSorteos();
 
   try {
+    // Guardar una referencia para el resumen final (antes de obtener sorteos nuevos)
+    let sorteosExistentesCount = 0;
+    const archivoPath = path.join(process.cwd(), 'data', `quini_${añoObjetivo}_completo.json`);
+    if (fs.existsSync(archivoPath)) {
+      try {
+        const contenido = fs.readFileSync(archivoPath, 'utf-8');
+        const resultadoAnterior = JSON.parse(contenido) as ResultadoScraping;
+        sorteosExistentesCount = resultadoAnterior.sorteos.length;
+      } catch (e) {
+        // Ignorar errores
+      }
+    }
+
     // Inicializar navegador
     await scraper.inicializar();
 
-    // Obtener solo sorteos nuevos
+    // Obtener solo sorteos nuevos (pero retorna todos los sorteos combinados)
     const resultado = await obtenerSorteosNuevos(scraper, añoObjetivo);
 
     if (resultado.sorteos.length > 0) {
