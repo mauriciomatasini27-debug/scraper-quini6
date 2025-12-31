@@ -93,7 +93,7 @@ function mapearSorteoASupabase(sorteo: SorteoQuini6, año: number): any {
       parseInt(sorteo.siempreSale.numeros.numero5),
       parseInt(sorteo.siempreSale.numeros.numero6)
     ],
-    pozo_extra: sorteo.pozoExtra ? JSON.stringify(sorteo.pozoExtra) : null,
+    pozo_extra: sorteo.pozoExtra ? sorteo.pozoExtra : null,
     url: sorteo.url,
     extraido_en: sorteo.extraidoEn ? new Date(sorteo.extraidoEn).toISOString() : null
   };
@@ -132,11 +132,11 @@ async function upsertSorteos(
           sorteo.fecha,
           sorteo.fecha_texto,
           sorteo.año,
-          JSON.stringify(sorteo.tradicional),
-          JSON.stringify(sorteo.la_segunda),
-          JSON.stringify(sorteo.revancha),
-          JSON.stringify(sorteo.siempre_sale),
-          sorteo.pozo_extra,
+          sorteo.tradicional, // PostgreSQL maneja arrays de JavaScript directamente
+          sorteo.la_segunda,
+          sorteo.revancha,
+          sorteo.siempre_sale,
+          sorteo.pozo_extra, // El driver pg convierte objetos JavaScript a JSONB automáticamente
           sorteo.url,
           sorteo.extraido_en
         ].forEach(val => {
@@ -146,6 +146,8 @@ async function upsertSorteos(
         placeholders.push(`(${rowPlaceholders.join(', ')})`);
       });
 
+      // Construir query con cast explícito para pozo_extra (JSONB)
+      // Los arrays de enteros se pasan directamente - el driver pg los convierte automáticamente
       const query = `
         INSERT INTO resultados_quini (
           sorteo_numero, fecha, fecha_texto, año,

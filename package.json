@@ -17,7 +17,13 @@
     "import:history": "npm run build && node dist/scripts/importHistory.js",
     "import:history:dev": "ts-node src/scripts/importHistory.ts",
     "import:history:pg": "npm run build && node dist/scripts/importHistoryPg.js",
-    "import:history:pg:dev": "ts-node src/scripts/importHistoryPg.ts"
+    "import:history:pg:dev": "ts-node src/scripts/importHistoryPg.ts",
+    "analisis:prueba": "npm run build && node dist/engine/analisis-prueba.js",
+    "analisis:prueba:dev": "ts-node src/engine/analisis-prueba.ts",
+    "analisis:recalibrado": "npm run build && node dist/engine/analisis-recalibrado.js",
+    "analisis:recalibrado:dev": "ts-node src/engine/analisis-recalibrado.ts",
+    "analisis:modulos": "npm run build && node dist/engine/ejemplo-modulos-avanzados.js",
+    "analisis:modulos:dev": "ts-node src/engine/ejemplo-modulos-avanzados.ts"
   },
   "keywords": [
     "scraper",
