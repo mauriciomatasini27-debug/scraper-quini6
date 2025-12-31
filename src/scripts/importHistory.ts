@@ -138,7 +138,7 @@ async function upsertSorteos(
     }
 
     // Pequeña pausa entre lotes para no sobrecargar
-    if (i + batchSize < sorteos.length) {
+    if (i + batchSize < sorteosSinDuplicados.length) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
