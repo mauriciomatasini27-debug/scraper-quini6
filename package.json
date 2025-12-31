@@ -30,8 +30,6 @@
     "analisis:optimizar:dev": "ts-node src/engine/optimizacion-score.ts",
     "analisis:final": "npm run build && node dist/engine/analisis-final-optimizado.js",
     "analisis:final:dev": "ts-node src/engine/analisis-final-optimizado.ts",
-    "analisis:gemini": "npm run build && node dist/engine/analisis-con-gemini.js",
-    "analisis:gemini:dev": "ts-node src/engine/analisis-con-gemini.ts",
     "analisis:juez": "npm run build && node dist/engine/analisis-juez-final.js",
     "analisis:juez:dev": "ts-node src/engine/analisis-juez-final.ts",
     "analisis:lyra-completo": "npm run build && node dist/engine/analisis-protocolo-lyra.js",
@@ -50,7 +48,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.89.0",
     "dotenv": "^17.2.3",
     "node-cron": "^3.0.3",

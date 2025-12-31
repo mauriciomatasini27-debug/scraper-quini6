@@ -2,11 +2,10 @@
  * AI Predictor - Juez Final
  * 
  * Este módulo actúa como el "cerebro" que toma la decisión final
- * sobre las combinaciones candidatas, usando Google Gemini AI
+ * sobre las combinaciones candidatas, usando Grok AI (xAI)
  * para evaluar coherencia orgánica y seleccionar las mejores opciones.
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Combinacion, AnalisisEstadistico, NumeroQuini, EstadisticaFrecuencia } from '../types';
 
 /**
@@ -51,24 +50,17 @@ export interface ResumenEstadistico {
  * Clase principal del Juez Final (AI Predictor)
  */
 export class AIPredictor {
-  private genAI: GoogleGenerativeAI;
-  private model: any;
+  private apiKey: string;
+  private apiUrl: string = 'https://api.x.ai/v1/chat/completions';
+  private model: string = 'grok-beta';
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.GEMINI_API_KEY;
+    const key = apiKey || process.env.GROK_API_KEY;
     if (!key) {
-      throw new Error('Falta GEMINI_API_KEY en el .env. Agrega GEMINI_API_KEY=tu_api_key');
+      throw new Error('Falta GROK_API_KEY en el .env. Agrega GROK_API_KEY=tu_api_key');
     }
 
-    this.genAI = new GoogleGenerativeAI(key);
-    this.model = this.genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-pro',
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.8,
-        topK: 40
-      }
-    });
+    this.apiKey = key;
   }
 
   /**
@@ -140,14 +132,46 @@ IMPORTANTE:
 `;
 
     try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      // Llamar a Grok API
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: 'Eres un Analista de Riesgos Estadísticos experto en Juegos de Azar. Responde siempre en formato JSON válido.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Grok API error: ${response.status} - ${errorData.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content || '';
+
+      if (!text) {
+        throw new Error('No se recibió respuesta de Grok API');
+      }
 
       // Extraer JSON de la respuesta
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No se pudo extraer JSON de la respuesta de Gemini');
+        throw new Error('No se pudo extraer JSON de la respuesta de Grok');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);
@@ -173,7 +197,7 @@ IMPORTANTE:
 
       // Si no se pudieron extraer 3 válidas, usar las primeras candidatas
       if (top3.length < 3 && candidatas.length >= 3) {
-        console.warn('⚠️  Gemini no devolvió 3 combinaciones válidas, usando top 3 candidatas');
+        console.warn('⚠️  Grok no devolvió 3 combinaciones válidas, usando top 3 candidatas');
         top3.push(...candidatas.slice(0, 3 - top3.length));
       }
 
@@ -186,27 +210,27 @@ IMPORTANTE:
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
       // Detectar error de cuota
-      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota')) {
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Quota') || errorMessage.includes('rate limit')) {
         const retryMatch = errorMessage.match(/retry in (\d+\.?\d*)s/i);
         const retrySeconds = retryMatch ? parseFloat(retryMatch[1]) : 60;
         
         throw new Error(
           `Cuota de API excedida. Por favor espera ${Math.ceil(retrySeconds)} segundos antes de reintentar. ` +
-          `Verifica tu cuota en: https://ai.dev/usage?tab=rate-limit`
+          `Verifica tu cuota en: https://console.x.ai`
         );
       }
 
       // Si falla, devolver las top 3 candidatas como fallback
-      console.warn(`⚠️  Error obteniendo veredicto de Gemini: ${errorMessage}`);
+      console.warn(`⚠️  Error obteniendo veredicto de Grok: ${errorMessage}`);
       console.warn('   Usando top 3 candidatas como fallback');
       
       return {
         top3: candidatas.slice(0, 3),
-        analisisTecnico: `Fallback: Error al obtener análisis de Gemini (${errorMessage}). Usando top 3 candidatas por score estadístico.`,
+        analisisTecnico: `Fallback: Error al obtener análisis de Grok (${errorMessage}). Usando top 3 candidatas por score estadístico.`,
         razones: [
           'Seleccionadas por score de priorización',
           'Basadas en análisis estadístico local',
-          'Fallback debido a error en API de Gemini'
+          'Fallback debido a error en API de Grok'
         ]
       };
     }
