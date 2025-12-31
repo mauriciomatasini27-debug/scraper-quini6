@@ -71,14 +71,41 @@ Script para importar todos los datos históricos de Quini 6 (2020-2025) desde ar
 
 ### Uso
 
-#### Modo Producción (compilado):
+#### Opción 1: Usando API REST de Supabase (recomendado para uso general)
+
+**Modo Producción (compilado):**
 ```bash
 npm run import:history
 ```
 
-#### Modo Desarrollo (con ts-node):
+**Modo Desarrollo (con ts-node):**
 ```bash
 npm run import:history:dev
+```
+
+**Variables requeridas:**
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (Service Role Key)
+
+#### Opción 2: Usando PostgreSQL Directo (más rápido para importaciones masivas)
+
+**Modo Producción (compilado):**
+```bash
+npm run import:history:pg
+```
+
+**Modo Desarrollo (con ts-node):**
+```bash
+npm run import:history:pg:dev
+```
+
+**Variables requeridas:**
+- `DATABASE_URL` o `POSTGRES_URL` (connection string completo)
+- O componentes individuales: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+
+**Ejemplo de connection string:**
+```
+postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
 ```
 
 ### Qué hace el script

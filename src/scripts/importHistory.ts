@@ -3,6 +3,10 @@
  * Recorre los archivos JSON de 2020-2025 y realiza upsert masivo
  */
 
+// Cargar variables de entorno desde .env
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ResultadoScraping, SorteoQuini6 } from '../types';
 import * as fs from 'fs';
@@ -94,13 +98,24 @@ async function upsertSorteos(
   let success = 0;
   let errors = 0;
 
-  console.log(`\n📤 Insertando ${sorteos.length} sorteos del año ${año} en lotes de ${batchSize}...`);
+  // Eliminar duplicados primero (mantener el último por sorteo_numero)
+  const sorteosUnicos = new Map<number, any>();
+  for (const sorteo of sorteos) {
+    sorteosUnicos.set(sorteo.sorteo_numero, sorteo);
+  }
+  const sorteosSinDuplicados = Array.from(sorteosUnicos.values());
+  
+  if (sorteosSinDuplicados.length < sorteos.length) {
+    console.log(`⚠️  Se encontraron ${sorteos.length - sorteosSinDuplicados.length} sorteos duplicados, se procesarán ${sorteosSinDuplicados.length} únicos`);
+  }
+
+  console.log(`\n📤 Insertando ${sorteosSinDuplicados.length} sorteos del año ${año} en lotes de ${batchSize}...`);
 
   // Procesar en lotes para evitar límites de tamaño
-  for (let i = 0; i < sorteos.length; i += batchSize) {
-    const batch = sorteos.slice(i, i + batchSize);
+  for (let i = 0; i < sorteosSinDuplicados.length; i += batchSize) {
+    const batch = sorteosSinDuplicados.slice(i, i + batchSize);
     const batchNumber = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(sorteos.length / batchSize);
+    const totalBatches = Math.ceil(sorteosSinDuplicados.length / batchSize);
 
     try {
       const { data, error } = await supabase
