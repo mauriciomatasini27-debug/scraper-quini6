@@ -168,6 +168,16 @@ export interface ConfiguracionMotor {
 }
 
 /**
+ * Veredicto del Juez Final (AI Predictor)
+ */
+export interface VeredictoJuezFinal {
+  top3: Combinacion[];
+  analisisTecnico: string;
+  razones: string[];
+  timestamp: Date;
+}
+
+/**
  * Resultado completo del análisis del motor
  */
 export interface ResultadoAnalisis {
@@ -182,6 +192,7 @@ export interface ResultadoAnalisis {
       desviacion: number;
     }>;
   };
+  veredictoJuezFinal?: VeredictoJuezFinal; // Veredicto del AI Predictor
   timestamp: Date;
 }
 

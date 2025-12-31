@@ -4,6 +4,7 @@
  */
 
 import { ResultadoScraping, SorteoQuini6 } from './types';
+import { VeredictoJuezFinal } from './engine/types';
 
 interface SupabaseConfig {
   url: string;
@@ -138,6 +139,161 @@ export async function guardarEnSupabaseBatch(resultado: ResultadoScraping): Prom
 
   } catch (error) {
     console.error('❌ Error al guardar en Supabase:', error);
+    if (error instanceof Error) {
+      console.error('   Mensaje:', error.message);
+    }
+    return false;
+  }
+}
+
+/**
+ * Interfaz para los datos de una predicción de IA
+ */
+export interface AIPredictionData {
+  fechaSorteo: Date | string;
+  numeroSorteo?: number;
+  combinacion1: number[];
+  combinacion2: number[];
+  combinacion3: number[];
+  analisisTecnico?: string;
+  razones?: string[];
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Guarda el veredicto del Juez Final (AI Predictor) en Supabase
+ * Esto permite auditar la precisión del motor en el futuro
+ * 
+ * @param veredicto Veredicto del Juez Final con las 3 combinaciones seleccionadas
+ * @param fechaSorteo Fecha del sorteo para el cual se hizo la predicción
+ * @param numeroSorteo Número del sorteo (opcional, puede ser null si es una predicción futura)
+ * @param metadata Información adicional opcional (scores, estadísticas, etc.)
+ * @returns true si se guardó exitosamente, false en caso contrario
+ */
+export async function logAIVeredicto(
+  veredicto: VeredictoJuezFinal,
+  fechaSorteo: Date | string,
+  numeroSorteo?: number,
+  metadata?: Record<string, any>
+): Promise<boolean> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    console.warn('⚠️  Supabase no configurado. Saltando guardado de veredicto de IA.');
+    return false;
+  }
+
+  // Validar que hay al menos 3 combinaciones
+  if (!veredicto.top3 || veredicto.top3.length < 3) {
+    console.warn('⚠️  El veredicto no contiene 3 combinaciones. Saltando guardado.');
+    return false;
+  }
+
+  try {
+    console.log('💾 Guardando veredicto de IA en Supabase...');
+
+    // Formatear fecha
+    const fechaFormateada = fechaSorteo instanceof Date 
+      ? fechaSorteo.toISOString().split('T')[0] 
+      : fechaSorteo;
+
+    // Preparar datos para inserción
+    const datosPrediccion = {
+      fecha_sorteo: fechaFormateada,
+      numero_sorteo: numeroSorteo || null,
+      combinacion_1: veredicto.top3[0],
+      combinacion_2: veredicto.top3[1],
+      combinacion_3: veredicto.top3[2],
+      analisis_tecnico: veredicto.analisisTecnico || null,
+      razones: veredicto.razones || [],
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      created_at: new Date().toISOString()
+    };
+
+    // Insertar en Supabase
+    const response = await fetch(`${config.url}/rest/v1/ai_predictions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': config.key,
+        'Authorization': `Bearer ${config.key}`,
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(datosPrediccion)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Error al guardar veredicto de IA: ${response.status} - ${errorText}`);
+      return false;
+    }
+
+    const resultado = await response.json();
+    console.log(`✅ Veredicto de IA guardado exitosamente (ID: ${resultado[0]?.id || 'N/A'})`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Error al guardar veredicto de IA en Supabase:', error);
+    if (error instanceof Error) {
+      console.error('   Mensaje:', error.message);
+    }
+    return false;
+  }
+}
+
+/**
+ * Actualiza el resultado real de una predicción de IA
+ * Esto permite calcular los aciertos automáticamente
+ * 
+ * @param fechaSorteo Fecha del sorteo
+ * @param resultadoReal Resultado real del sorteo (combinación ganadora)
+ * @returns true si se actualizó exitosamente, false en caso contrario
+ */
+export async function actualizarResultadoReal(
+  fechaSorteo: Date | string,
+  resultadoReal: number[]
+): Promise<boolean> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    console.warn('⚠️  Supabase no configurado. Saltando actualización de resultado real.');
+    return false;
+  }
+
+  try {
+    // Formatear fecha
+    const fechaFormateada = fechaSorteo instanceof Date 
+      ? fechaSorteo.toISOString().split('T')[0] 
+      : fechaSorteo;
+
+    // Actualizar el registro
+    const response = await fetch(
+      `${config.url}/rest/v1/ai_predictions?fecha_sorteo=eq.${fechaFormateada}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': config.key,
+          'Authorization': `Bearer ${config.key}`,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          resultado_real: resultadoReal
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Error al actualizar resultado real: ${response.status} - ${errorText}`);
+      return false;
+    }
+
+    console.log(`✅ Resultado real actualizado para fecha ${fechaFormateada}`);
+    return true;
+
+  } catch (error) {
+    console.error('❌ Error al actualizar resultado real:', error);
     if (error instanceof Error) {
       console.error('   Mensaje:', error.message);
     }
