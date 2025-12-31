@@ -221,6 +221,8 @@ export { HeuristicFilters } from './filters/HeuristicFilters';
 export { PatternAnalyzer } from './pattern/PatternAnalyzer';
 export { WheelingEngine } from './wheeling/WheelingEngine';
 export { ChiSquareTest } from './statistical/ChiSquareTest';
+export { CoOccurrenceEngine } from './cooccurrence/CoOccurrenceEngine';
+export { EntropyFilter } from './filters/EntropyFilter';
 
 // Exportar utilidades estadísticas
 export * from './statistical/PoissonDistribution';

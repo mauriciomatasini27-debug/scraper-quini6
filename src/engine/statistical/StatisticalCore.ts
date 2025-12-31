@@ -12,7 +12,8 @@ import {
   SorteoNormalizado,
   EstadisticaFrecuencia,
   NumeroQuini,
-  AnalisisEstadistico
+  AnalisisEstadistico,
+  EstadisticasAmplitud
 } from '../types';
 import { calcularScoreProbabilidad, calcularLambda } from './PoissonDistribution';
 
@@ -38,6 +39,7 @@ export class StatisticalCore {
     const { media, desviacionEstandar } = this.calcularMediaYDesviacion(frecuencias);
     const mediasMoviles = this.calcularMediasMoviles(sorteos, ventanasMediaMovil);
     const matrizTransicion = this.calcularMatrizTransicion(sorteos);
+    const estadisticasAmplitud = this.calcularEstadisticasAmplitud(sorteos);
 
     const fechas = sorteos.map(s => s.fecha).sort((a, b) => a.getTime() - b.getTime());
 
@@ -51,7 +53,8 @@ export class StatisticalCore {
       desviacionEstandar,
       media,
       mediasMoviles,
-      matrizTransicion
+      matrizTransicion,
+      estadisticasAmplitud
     };
   }
 
@@ -278,6 +281,81 @@ export class StatisticalCore {
     }
 
     return numerosConAtrasoAlto;
+  }
+
+  /**
+   * Calcula estadísticas de amplitud (rango: diferencia entre máximo y mínimo)
+   * Protocolo Lyra Fase 2: Históricamente, en dominio 00-45, la amplitud suele estar entre 32 y 43
+   */
+  public calcularEstadisticasAmplitud(sorteos: SorteoNormalizado[]): EstadisticasAmplitud {
+    const amplitudes: number[] = [];
+
+    for (const sorteo of sorteos) {
+      // Si ya tiene amplitud calculada, usarla
+      if (sorteo.amplitud !== undefined) {
+        amplitudes.push(sorteo.amplitud);
+      } else {
+        // Calcular amplitud
+        const numeros = [...sorteo.numeros].sort((a, b) => a - b);
+        const amplitud = numeros[numeros.length - 1] - numeros[0];
+        amplitudes.push(amplitud);
+      }
+    }
+
+    if (amplitudes.length === 0) {
+      return {
+        media: 0,
+        desviacionEstandar: 0,
+        min: 0,
+        max: 0,
+        percentil25: 0,
+        percentil50: 0,
+        percentil75: 0
+      };
+    }
+
+    // Ordenar para calcular percentiles
+    const amplitudesOrdenadas = [...amplitudes].sort((a, b) => a - b);
+
+    // Calcular media
+    const media = amplitudes.reduce((sum, val) => sum + val, 0) / amplitudes.length;
+
+    // Calcular desviación estándar
+    const varianza = amplitudes.reduce(
+      (sum, val) => sum + Math.pow(val - media, 2),
+      0
+    ) / amplitudes.length;
+    const desviacionEstandar = Math.sqrt(varianza);
+
+    // Calcular percentiles
+    const percentil25 = this.calcularPercentil(amplitudesOrdenadas, 25);
+    const percentil50 = this.calcularPercentil(amplitudesOrdenadas, 50);
+    const percentil75 = this.calcularPercentil(amplitudesOrdenadas, 75);
+
+    return {
+      media,
+      desviacionEstandar,
+      min: amplitudesOrdenadas[0],
+      max: amplitudesOrdenadas[amplitudesOrdenadas.length - 1],
+      percentil25,
+      percentil50,
+      percentil75
+    };
+  }
+
+  /**
+   * Calcula un percentil de un array ordenado
+   */
+  private calcularPercentil(arrayOrdenado: number[], percentil: number): number {
+    if (arrayOrdenado.length === 0) return 0;
+    if (arrayOrdenado.length === 1) return arrayOrdenado[0];
+
+    const indice = (percentil / 100) * (arrayOrdenado.length - 1);
+    const indiceBajo = Math.floor(indice);
+    const indiceAlto = Math.ceil(indice);
+    const peso = indice - indiceBajo;
+
+    return arrayOrdenado[indiceBajo] * (1 - peso) + arrayOrdenado[indiceAlto] * peso;
   }
 }
 

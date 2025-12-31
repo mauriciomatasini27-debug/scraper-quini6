@@ -9,7 +9,7 @@ async function main() {
   const año = 2024;
   
   console.log(`🎲 Scraper de Quini 6 - Año ${año}`);
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
   console.log('');
 
   const scraper = new Quini6Scraper(año);

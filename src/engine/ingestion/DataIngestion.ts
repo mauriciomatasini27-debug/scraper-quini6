@@ -86,6 +86,9 @@ export class DataIngestion {
             const paridad = this.calcularParidad(numeros);
             const espaciado = this.calcularEspaciado(numeros);
 
+            // Calcular amplitud (diferencia entre máximo y mínimo)
+            const amplitud = numeros[numeros.length - 1] - numeros[0];
+
             sorteosNormalizados.push({
               numeroSorteo: sorteo.numeroSorteo,
               fecha: new Date(sorteo.fechaISO),
@@ -94,7 +97,8 @@ export class DataIngestion {
               numeros: combinacion,
               suma,
               paridad,
-              espaciado
+              espaciado,
+              amplitud
             });
           }
         }

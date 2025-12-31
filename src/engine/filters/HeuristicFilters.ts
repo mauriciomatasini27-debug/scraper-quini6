@@ -6,6 +6,8 @@
  * - Sumas (Campana de Gauss)
  * - Espaciado
  * - Atrasos
+ * - Entropía (Shannon) - Protocolo Lyra Fase 2
+ * - Amplitud (Rango)
  */
 
 import {
@@ -15,6 +17,7 @@ import {
   NumeroQuini,
   AnalisisEstadistico
 } from '../types';
+import { EntropyFilter } from './EntropyFilter';
 
 /**
  * Clase principal para filtros heurísticos
@@ -22,6 +25,11 @@ import {
 export class HeuristicFilters {
   private readonly RANGO_MIN = 0;
   private readonly RANGO_MAX = 45;
+  private entropyFilter: EntropyFilter;
+
+  constructor() {
+    this.entropyFilter = new EntropyFilter();
+  }
 
   /**
    * Aplica todos los filtros configurados a un conjunto de combinaciones
@@ -229,6 +237,49 @@ export class HeuristicFilters {
 
     generar([], this.RANGO_MIN);
     return combinaciones;
+  }
+
+  /**
+   * Filtra combinaciones por entropía de Shannon
+   */
+  private filtrarPorEntropia(
+    combinaciones: Combinacion[],
+    filtro: NonNullable<FiltrosHeuristicos['entropia']>,
+    analisis?: AnalisisEstadistico
+  ): Combinacion[] {
+    const umbralMinimo = filtro.umbralMinimo ?? 0.3;
+    const umbralMaximo = filtro.umbralMaximo ?? 0.9;
+    const frecuencias = analisis?.frecuencias;
+
+    return this.entropyFilter.filtrarPorEntropia(
+      combinaciones,
+      umbralMinimo,
+      umbralMaximo,
+      frecuencias
+    );
+  }
+
+  /**
+   * Filtra combinaciones por rango de amplitud
+   */
+  private filtrarPorAmplitud(
+    combinaciones: Combinacion[],
+    filtro: NonNullable<FiltrosHeuristicos['amplitud']>
+  ): Combinacion[] {
+    return combinaciones.filter(combinacion => {
+      const numerosOrdenados = [...combinacion].sort((a, b) => a - b);
+      const amplitud = numerosOrdenados[numerosOrdenados.length - 1] - numerosOrdenados[0];
+      
+      if (filtro.min !== undefined && amplitud < filtro.min) {
+        return false;
+      }
+      
+      if (filtro.max !== undefined && amplitud > filtro.max) {
+        return false;
+      }
+
+      return true;
+    });
   }
 
   /**

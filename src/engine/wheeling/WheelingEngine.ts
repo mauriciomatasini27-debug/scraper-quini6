@@ -6,7 +6,9 @@
  * necesarias para garantizar un acierto de 4 si salen 5 números del set.
  */
 
-import { NumeroQuini, Combinacion } from '../types';
+import { NumeroQuini, Combinacion, EstadisticaFrecuencia } from '../types';
+import { CoOccurrenceEngine } from '../cooccurrence/CoOccurrenceEngine';
+import { EntropyFilter } from '../filters/EntropyFilter';
 
 /**
  * Resultado de un sistema reducido
@@ -23,9 +25,37 @@ export interface SistemaReducido {
 }
 
 /**
+ * Pesos para priorización de combinaciones (Protocolo Lyra Fase 2)
+ */
+export interface PesosPriorizacion {
+  coOcurrencia?: number; // Peso del score de afinidad (Jaccard)
+  entropia?: number; // Peso de la entropía de Shannon
+  amplitud?: number; // Peso del rango de amplitud
+  frecuencia?: number; // Peso de las frecuencias históricas
+}
+
+/**
  * Clase principal para sistemas reducidos
  */
 export class WheelingEngine {
+  private coOccurrenceEngine?: CoOccurrenceEngine;
+  private entropyFilter: EntropyFilter;
+  private frecuencias?: Map<NumeroQuini, EstadisticaFrecuencia>;
+
+  constructor() {
+    this.entropyFilter = new EntropyFilter();
+  }
+
+  /**
+   * Configura los motores necesarios para priorización
+   */
+  public configurarPriorizacion(
+    coOccurrenceEngine?: CoOccurrenceEngine,
+    frecuencias?: Map<NumeroQuini, EstadisticaFrecuencia>
+  ): void {
+    this.coOccurrenceEngine = coOccurrenceEngine;
+    this.frecuencias = frecuencias;
+  }
   /**
    * Genera un sistema reducido que garantiza 4 aciertos si salen 5 números del set
    * 
@@ -172,10 +202,12 @@ export class WheelingEngine {
    * Genera un sistema reducido optimizado usando heurísticas
    * 
    * Versión más eficiente que usa técnicas de optimización combinatoria
+   * Ahora usa pesos de priorización (Protocolo Lyra Fase 2)
    */
   public generarSistemaReducidoOptimizado(
     numerosBase: NumeroQuini[],
-    maxCombinaciones: number = 20
+    maxCombinaciones: number = 20,
+    pesos?: PesosPriorizacion
   ): SistemaReducido {
     if (numerosBase.length < 6) {
       throw new Error('Se necesitan al menos 6 números');
@@ -183,11 +215,24 @@ export class WheelingEngine {
 
     // Si el set es pequeño, usar método completo
     if (numerosBase.length <= 10) {
-      return this.generarSistemaReducido(numerosBase);
+      const sistema = this.generarSistemaReducido(numerosBase);
+      
+      // Si hay pesos, reordenar por priorización
+      if (pesos && (this.coOccurrenceEngine || this.frecuencias)) {
+        const combinacionesConScore = sistema.combinaciones.map(comb => ({
+          combinacion: comb,
+          score: this.calcularScorePriorizacion(comb, pesos)
+        }));
+        
+        combinacionesConScore.sort((a, b) => b.score - a.score);
+        sistema.combinaciones = combinacionesConScore.map(item => item.combinacion);
+      }
+      
+      return sistema;
     }
 
-    // Para sets grandes, usar método heurístico
-    const combinaciones = this.generarCoberturaHeuristica(numerosBase, maxCombinaciones);
+    // Para sets grandes, usar método heurístico con priorización
+    const combinaciones = this.generarCoberturaHeuristica(numerosBase, maxCombinaciones, pesos);
 
     return {
       numerosBase: [...numerosBase].sort((a, b) => a - b),
@@ -202,11 +247,80 @@ export class WheelingEngine {
   }
 
   /**
+   * Calcula el score de priorización para una combinación
+   */
+  private calcularScorePriorizacion(
+    combinacion: Combinacion,
+    pesos: PesosPriorizacion = {
+      coOcurrencia: 0.3,
+      entropia: 0.3,
+      amplitud: 0.2,
+      frecuencia: 0.2
+    }
+  ): number {
+    let score = 0;
+
+    // Score de co-ocurrencia (afinidad)
+    if (pesos.coOcurrencia && this.coOccurrenceEngine) {
+      const scoreAfinidad = this.coOccurrenceEngine.calcularScoreAfinidad(combinacion);
+      score += scoreAfinidad * pesos.coOcurrencia;
+    }
+
+    // Score de entropía
+    if (pesos.entropia) {
+      const entropia = this.entropyFilter.calcularEntropiaCombinada(combinacion, this.frecuencias);
+      const entropiaNormalizada = this.entropyFilter.normalizarEntropia(entropia);
+      score += entropiaNormalizada * pesos.entropia;
+    }
+
+    // Score de amplitud (preferir amplitudes entre 32-43)
+    if (pesos.amplitud) {
+      const numerosOrdenados = [...combinacion].sort((a, b) => a - b);
+      const amplitud = numerosOrdenados[numerosOrdenados.length - 1] - numerosOrdenados[0];
+      
+      // Score máximo si está en rango 32-43
+      let scoreAmplitud = 0;
+      if (amplitud >= 32 && amplitud <= 43) {
+        scoreAmplitud = 1.0;
+      } else if (amplitud >= 28 && amplitud < 32) {
+        scoreAmplitud = 0.7; // Cerca del rango
+      } else if (amplitud > 43 && amplitud <= 45) {
+        scoreAmplitud = 0.7; // Cerca del rango
+      } else {
+        scoreAmplitud = 0.3; // Fuera del rango
+      }
+      
+      score += scoreAmplitud * pesos.amplitud;
+    }
+
+    // Score de frecuencia (preferir números con frecuencia media-alta)
+    if (pesos.frecuencia && this.frecuencias) {
+      let scoreFrecuencia = 0;
+      for (const numero of combinacion) {
+        const estadistica = this.frecuencias.get(numero);
+        if (estadistica) {
+          // Preferir frecuencias relativas entre 0.01 y 0.1
+          const freqRel = estadistica.frecuenciaRelativa;
+          if (freqRel >= 0.01 && freqRel <= 0.1) {
+            scoreFrecuencia += 1.0;
+          } else {
+            scoreFrecuencia += 0.5;
+          }
+        }
+      }
+      score += (scoreFrecuencia / combinacion.length) * pesos.frecuencia;
+    }
+
+    return score;
+  }
+
+  /**
    * Genera cobertura usando heurística para sets grandes
    */
   private generarCoberturaHeuristica(
     numerosBase: NumeroQuini[],
-    maxCombinaciones: number
+    maxCombinaciones: number,
+    pesos?: PesosPriorizacion
   ): Combinacion[] {
     const combinaciones: Combinacion[] = [];
     const numerosOrdenados = [...numerosBase].sort((a, b) => a - b);
@@ -245,6 +359,22 @@ export class WheelingEngine {
         combinacion.sort((a, b) => a - b);
         combinaciones.push(combinacion as Combinacion);
       }
+    }
+
+    // Si hay pesos de priorización, ordenar y seleccionar las mejores
+    if (pesos && (this.coOccurrenceEngine || this.frecuencias)) {
+      const combinacionesConScore = combinaciones.map(comb => ({
+        combinacion: comb,
+        score: this.calcularScorePriorizacion(comb, pesos)
+      }));
+
+      // Ordenar por score descendente
+      combinacionesConScore.sort((a, b) => b.score - a.score);
+
+      // Retornar las mejores
+      return combinacionesConScore
+        .slice(0, maxCombinaciones)
+        .map(item => item.combinacion);
     }
 
     return combinaciones;

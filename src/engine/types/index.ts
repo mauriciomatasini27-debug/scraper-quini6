@@ -35,6 +35,7 @@ export interface SorteoNormalizado {
     impares: number;
   };
   espaciado: number[];
+  amplitud?: number; // Rango de amplitud (diferencia entre máximo y mínimo)
 }
 
 /**
@@ -69,6 +70,21 @@ export interface EstadisticaTransicion {
 export type MatrizTransicion = Map<NumeroQuini, Map<NumeroQuini, number>>;
 
 /**
+ * Estadísticas de amplitud (rango) - Protocolo Lyra Fase 2
+ * Amplitud = diferencia entre el número más alto y el más bajo
+ * Históricamente, en dominio 00-45, la amplitud suele estar entre 32 y 43
+ */
+export interface EstadisticasAmplitud {
+  media: number;
+  desviacionEstandar: number;
+  min: number;
+  max: number;
+  percentil25: number;
+  percentil50: number; // Mediana
+  percentil75: number;
+}
+
+/**
  * Resultado del análisis estadístico completo
  */
 export interface AnalisisEstadistico {
@@ -86,6 +102,7 @@ export interface AnalisisEstadistico {
     ventana20: number[];
   };
   matrizTransicion: MatrizTransicion;
+  estadisticasAmplitud?: EstadisticasAmplitud;
 }
 
 /**
@@ -110,6 +127,14 @@ export interface FiltrosHeuristicos {
   atraso?: {
     numerosConAtrasoAlto?: NumeroQuini[]; // Números con atraso > σ
     umbralAtraso?: number;
+  };
+  entropia?: {
+    umbralMinimo?: number; // Entropía mínima normalizada (0-1)
+    umbralMaximo?: number; // Entropía máxima normalizada (0-1)
+  };
+  amplitud?: {
+    min?: number; // Amplitud mínima (diferencia max-min)
+    max?: number; // Amplitud máxima
   };
 }
 

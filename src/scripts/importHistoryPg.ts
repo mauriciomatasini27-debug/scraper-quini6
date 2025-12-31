@@ -125,29 +125,51 @@ async function upsertSorteos(
       const placeholders: string[] = [];
       let paramIndex = 1;
 
-      batch.forEach((sorteo, idx) => {
+      batch.forEach((sorteo) => {
         const rowPlaceholders: string[] = [];
-        [
-          sorteo.sorteo_numero,
-          sorteo.fecha,
-          sorteo.fecha_texto,
-          sorteo.año,
-          sorteo.tradicional, // PostgreSQL maneja arrays de JavaScript directamente
-          sorteo.la_segunda,
-          sorteo.revancha,
-          sorteo.siempre_sale,
-          sorteo.pozo_extra, // El driver pg convierte objetos JavaScript a JSONB automáticamente
-          sorteo.url,
-          sorteo.extraido_en
-        ].forEach(val => {
-          rowPlaceholders.push(`$${paramIndex++}`);
-          values.push(val);
-        });
+        let rowParamIndex = paramIndex;
+        
+        // Agregar campos básicos
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.sorteo_numero);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.fecha);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.fecha_texto);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.año);
+        
+        // Arrays de enteros - el driver pg los convierte automáticamente a INTEGER[]
+        rowPlaceholders.push(`$${rowParamIndex++}::integer[]`);
+        values.push(sorteo.tradicional);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}::integer[]`);
+        values.push(sorteo.la_segunda);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}::integer[]`);
+        values.push(sorteo.revancha);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}::integer[]`);
+        values.push(sorteo.siempre_sale);
+        
+        // pozo_extra - cast explícito a JSONB para evitar doble stringificación
+        rowPlaceholders.push(`$${rowParamIndex++}::jsonb`);
+        values.push(sorteo.pozo_extra);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.url);
+        
+        rowPlaceholders.push(`$${rowParamIndex++}`);
+        values.push(sorteo.extraido_en);
+        
+        paramIndex = rowParamIndex;
         placeholders.push(`(${rowPlaceholders.join(', ')})`);
       });
 
-      // Construir query con cast explícito para pozo_extra (JSONB)
-      // Los arrays de enteros se pasan directamente - el driver pg los convierte automáticamente
+      // Construir query con casts explícitos para arrays y JSONB
       const query = `
         INSERT INTO resultados_quini (
           sorteo_numero, fecha, fecha_texto, año,

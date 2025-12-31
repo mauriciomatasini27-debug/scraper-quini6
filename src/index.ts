@@ -11,7 +11,7 @@ async function main(año?: number) {
   const añoObjetivo = año || parseInt(process.argv[2]) || 2025;
   
   console.log(`🎲 Scraper de Quini 6 - Año ${añoObjetivo}`);
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
   console.log('');
 
   const scraper = new Quini6Scraper(añoObjetivo);

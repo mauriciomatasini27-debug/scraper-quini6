@@ -11,7 +11,7 @@ async function main() {
   const delayEntreAños = 3000; // 3 segundos entre años (2-4 segundos como se solicitó)
   
   console.log('🎲 Scraper Masivo de Quini 6 - Años 2020-2023');
-  console.log('=' .repeat(60));
+  console.log('='.repeat(60));
   console.log(`📅 Años a procesar: ${años.join(', ')}`);
   console.log('');
 
