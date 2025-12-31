@@ -5,12 +5,14 @@
  * Dado un set de números elegidos, genera el mínimo de combinaciones
  * necesarias para garantizar un acierto de 4 si salen 5 números del set.
  * 
- * Optimizado con p-limit para manejar grandes volúmenes (>10,000 combinaciones)
+ * Optimizado con p-limit para volúmenes medianos y Worker Threads para grandes volúmenes (>10,000 combinaciones)
  */
 
 import { NumeroQuini, Combinacion, EstadisticaFrecuencia } from '../types';
 import { CoOccurrenceEngine } from '../cooccurrence/CoOccurrenceEngine';
 import { EntropyFilter } from '../filters/EntropyFilter';
+import { Worker } from 'worker_threads';
+import { join } from 'path';
 import pLimit from 'p-limit';
 
 /**
@@ -59,6 +61,39 @@ export class WheelingEngine {
     this.coOccurrenceEngine = coOccurrenceEngine;
     this.frecuencias = frecuencias;
   }
+
+  /**
+   * Genera combinaciones de forma asíncrona usando hilos de trabajo (Worker Threads)
+   * 
+   * Este método utiliza un worker thread separado para generar combinaciones,
+   * lo que permite procesamiento paralelo sin bloquear el hilo principal.
+   * Ideal para grandes volúmenes de números (>10,000 combinaciones).
+   * 
+   * @param numeros Array de números base para generar combinaciones
+   * @returns Promise con array de combinaciones generadas
+   */
+  public async generarSistemaParalelo(numeros: NumeroQuini[]): Promise<Combinacion[]> {
+    if (numeros.length < 6) {
+      throw new Error('Se necesitan al menos 6 números para generar combinaciones');
+    }
+
+    // Determinar si usar worker o método directo basado en el volumen
+    const todasCombinaciones = this.combinaciones(numeros, 6);
+    const totalCombinaciones = todasCombinaciones.length;
+    
+    // Para grandes volúmenes, usar worker thread
+    if (totalCombinaciones > 10000) {
+      return await this.ejecutarWorker({
+        tipo: 'generarCobertura',
+        numerosBase: numeros,
+        aciertosRequeridos: 4
+      });
+    }
+    
+    // Para volúmenes menores, usar método directo más eficiente
+    const sistema = await this.generarSistemaReducido(numeros);
+    return sistema.combinaciones;
+  }
   /**
    * Genera un sistema reducido que garantiza 4 aciertos si salen 5 números del set
    * 
@@ -91,11 +126,70 @@ export class WheelingEngine {
   }
 
   /**
+   * Ejecuta el worker thread para procesamiento paralelo
+   * Soporta TypeScript usando ts-node/register en desarrollo
+   */
+  private async ejecutarWorker(task: {
+    tipo: 'generarCobertura' | 'generarHeuristica';
+    numerosBase: NumeroQuini[];
+    aciertosRequeridos?: number;
+    maxCombinaciones?: number;
+  }): Promise<Combinacion[]> {
+    return new Promise((resolve, reject) => {
+      // Determinar si estamos en desarrollo (ts-node) o producción (compilado)
+      // Verificar si __dirname apunta a src (desarrollo) o dist (producción)
+      const esDesarrollo = __dirname.includes('src');
+      
+      // Nota: Si usas ts-node, apuntamos al .ts; en producción al .js
+      const workerPath = join(__dirname, esDesarrollo ? 'WheelingWorker.ts' : 'WheelingWorker.js');
+
+      const worker = new Worker(workerPath, {
+        workerData: task,
+        execArgv: /\.ts$/.test(workerPath) ? ['-r', 'ts-node/register'] : [],
+        // Configuración de límites de recursos
+        resourceLimits: {
+          maxOldGenerationSizeMb: 512, // Límite de 512 Megabytes
+          stackSizeMb: 4,               // Límite de pila para recursión
+        }
+      });
+
+      worker.on('message', (result: { combinaciones: Combinacion[]; error?: string } | Combinacion[]) => {
+        // Manejar tanto el formato con error como directamente las combinaciones
+        if (Array.isArray(result)) {
+          // Formato directo: solo combinaciones
+          resolve(result);
+        } else if ('error' in result) {
+          // Formato con error
+          if (result.error) {
+            reject(new Error(result.error));
+          } else {
+            resolve(result.combinaciones);
+          }
+        } else {
+          resolve(result.combinaciones);
+        }
+        worker.terminate();
+      });
+
+      worker.on('error', (err) => {
+        reject(new Error(`Error en el Worker de Wheeling: ${err.message}`));
+        worker.terminate();
+      });
+
+      worker.on('exit', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Worker finalizó con código de salida ${code}`));
+        }
+      });
+    });
+  }
+
+  /**
    * Genera una cobertura mínima usando algoritmo greedy
-   * Optimizado con p-limit para grandes volúmenes (>10,000 combinaciones)
+   * Optimizado con p-limit para volúmenes medianos y Worker Threads para grandes volúmenes (>10,000 combinaciones)
    * 
    * @param numerosBase Números base
-   * @param tamanoCombinacion Tamaño de cada combinación (6 para Quini)
+   * @param aciertosRequeridos Cuántos aciertos se requieren
    * @param numerosQueDebenSalir Cuántos números del set deben salir
    */
   private async generarCoberturaMinima(
@@ -103,19 +197,35 @@ export class WheelingEngine {
     aciertosRequeridos: number,
     numerosQueDebenSalir: number
   ): Promise<Combinacion[]> {
-    // Generar todas las combinaciones de 'aciertosRequeridos' números del set
+    // Generar todas las combinaciones posibles de 6 números del set
+    const todasCombinaciones = this.combinaciones(numerosBase, 6);
+    const totalCombinaciones = todasCombinaciones.length;
+
+    // Si hay más de 10,000 combinaciones, usar Worker Thread
+    const usarWorker = totalCombinaciones > 10000;
+
+    if (usarWorker) {
+      try {
+        // Usar worker thread para procesamiento paralelo en otro hilo
+        return await this.ejecutarWorker({
+          tipo: 'generarCobertura',
+          numerosBase,
+          aciertosRequeridos
+        });
+      } catch (error) {
+        // Si el worker falla, caer back a p-limit
+        console.warn(`⚠️  Worker thread falló, usando p-limit: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      }
+    }
+
+    // Para volúmenes menores o como fallback, usar p-limit
     const combinacionesObjetivo = this.combinaciones(numerosBase, aciertosRequeridos);
     
     const combinacionesGeneradas: Combinacion[] = [];
     const combinacionesCubiertas = new Set<string>();
 
-    // Generar todas las combinaciones posibles de 6 números del set
-    const todasCombinaciones = this.combinaciones(numerosBase, 6);
-    const totalCombinaciones = todasCombinaciones.length;
-
-    // Si hay más de 10,000 combinaciones, usar p-limit para controlar concurrencia
-    const usarLimitador = totalCombinaciones > 10000;
-    const limitador = usarLimitador ? pLimit(50) : null; // Limitar a 50 operaciones concurrentes
+    const usarLimitador = totalCombinaciones > 5000;
+    const limitador = usarLimitador ? pLimit(50) : null;
 
     // Algoritmo greedy: mientras haya combinaciones sin cubrir
     while (combinacionesCubiertas.size < combinacionesObjetivo.length) {
@@ -355,26 +465,55 @@ export class WheelingEngine {
 
   /**
    * Genera cobertura usando heurística para sets grandes
-   * Optimizado con p-limit para grandes volúmenes
+   * Optimizado con p-limit para volúmenes medianos y Worker Threads para grandes volúmenes (>10,000 combinaciones)
    */
   private async generarCoberturaHeuristica(
     numerosBase: NumeroQuini[],
     maxCombinaciones: number,
     pesos?: PesosPriorizacion
   ): Promise<Combinacion[]> {
+    // Si maxCombinaciones es muy grande, usar Worker Thread
+    const usarWorker = maxCombinaciones > 10000;
+
+    if (usarWorker) {
+      try {
+        // Usar worker thread para procesamiento paralelo
+        const combinaciones = await this.ejecutarWorker({
+          tipo: 'generarHeuristica',
+          numerosBase,
+          maxCombinaciones
+        });
+
+        // Si hay pesos de priorización, aplicar en el thread principal
+        if (pesos && (this.coOccurrenceEngine || this.frecuencias)) {
+          const combinacionesConScore = combinaciones.map(comb => ({
+            combinacion: comb,
+            score: this.calcularScorePriorizacion(comb, pesos)
+          }));
+
+          combinacionesConScore.sort((a, b) => b.score - a.score);
+          return combinacionesConScore
+            .slice(0, maxCombinaciones)
+            .map(item => item.combinacion);
+        }
+
+        return combinaciones;
+      } catch (error) {
+        // Si el worker falla, caer back a p-limit
+        console.warn(`⚠️  Worker thread falló, usando p-limit: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      }
+    }
+
+    // Para volúmenes menores o como fallback, usar p-limit
     const combinaciones: Combinacion[] = [];
     const numerosOrdenados = [...numerosBase].sort((a, b) => a - b);
 
-    // Estrategia: Distribuir los números de manera balanceada
-    // Crear combinaciones que maximicen la diversidad
-
-    // Si maxCombinaciones es grande, usar p-limit para optimizar
-    const usarLimitador = maxCombinaciones > 10000;
-    const limitador = usarLimitador ? pLimit(100) : null; // Más permisivo para heurística
+    const usarLimitador = maxCombinaciones > 5000;
+    const limitador = usarLimitador ? pLimit(100) : null;
 
     const tareasGeneracion = [];
     for (let i = 0; i < maxCombinaciones && combinaciones.length < maxCombinaciones; i++) {
-      const tarea = (async () => {
+      const crearCombinacion = async () => {
         const combinacion: NumeroQuini[] = [];
         const numerosUsados = new Set<NumeroQuini>();
 
@@ -406,12 +545,12 @@ export class WheelingEngine {
           return combinacion as Combinacion;
         }
         return null;
-      })();
+      };
 
       if (usarLimitador && limitador) {
-        tareasGeneracion.push(limitador(tarea));
+        tareasGeneracion.push(limitador(crearCombinacion));
       } else {
-        tareasGeneracion.push(tarea);
+        tareasGeneracion.push(crearCombinacion());
       }
     }
 

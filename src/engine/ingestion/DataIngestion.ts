@@ -160,15 +160,7 @@ export class DataIngestion {
     for (let i = 0; i < valores.length; i++) {
       const valor = valores[i];
       if (!valor) {
-        throw new z.ZodError([
-          {
-            code: z.ZodIssueCode.invalid_type,
-            expected: z.ZodParsedType.string,
-            received: z.ZodParsedType.undefined,
-            path: [`numero${i + 1}`],
-            message: `Número ${i + 1} está vacío o es undefined`
-          }
-        ]);
+        throw new Error(`Número ${i + 1} está vacío o es undefined`);
       }
 
       const numero = parseInt(valor, 10);
@@ -179,13 +171,7 @@ export class DataIngestion {
         numerosArray.push(numeroValidado);
       } catch (error) {
         if (error instanceof z.ZodError) {
-          throw new z.ZodError([
-            {
-              code: z.ZodIssueCode.custom,
-              path: [`numero${i + 1}`],
-              message: `Número inválido: ${valor}. Debe estar en el rango 00-45 (inclusive).`
-            }
-          ]);
+          throw new Error(`Número inválido: ${valor}. Debe estar en el rango 00-45 (inclusive).`);
         }
         throw error;
       }
@@ -196,13 +182,7 @@ export class DataIngestion {
       CombinacionSchema.parse(numerosArray);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw new z.ZodError([
-          {
-            code: z.ZodIssueCode.custom,
-            path: [],
-            message: `Combinación inválida: debe tener exactamente 6 números en el rango 00-45. Números recibidos: ${numerosArray.join(', ')}`
-          }
-        ]);
+        throw new Error(`Combinación inválida: debe tener exactamente 6 números en el rango 00-45. Números recibidos: ${numerosArray.join(', ')}`);
       }
       throw error;
     }

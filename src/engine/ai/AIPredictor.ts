@@ -10,7 +10,7 @@
 
 import { Groq } from 'groq-sdk';
 import { Combinacion, AnalisisEstadistico, NumeroQuini, EstadisticaFrecuencia } from '../types';
-import { withRetry, RetryConfig } from '../../utils/retry';
+import { withRetry } from '../utils/Resilience';
 
 /**
  * Resultado del veredicto final del AI Predictor
@@ -138,8 +138,8 @@ IMPORTANTE:
 
     try {
       // Llamar a Groq API con retry y backoff exponencial
-      const chatCompletion = await withRetry(
-        () => this.groq.chat.completions.create({
+      const text = await withRetry(async () => {
+        const chatCompletion = await this.groq.chat.completions.create({
           messages: [
             {
               role: 'system',
@@ -154,21 +154,17 @@ IMPORTANTE:
           temperature: 0.6,
           max_tokens: 4096,
           top_p: 0.95,
-          stream: false
-        }),
-        {
-          ...RetryConfig.groq,
-          onRetry: (attempt, error) => {
-            console.warn(`⚠️  Reintento ${attempt} de ${RetryConfig.groq.maxRetries} para Groq API: ${error.message}`);
-          }
+          stream: false,
+          response_format: { type: 'json_object' }
+        });
+
+        const responseContent = chatCompletion.choices[0]?.message?.content || '';
+        if (!responseContent) {
+          throw new Error('Respuesta vacía de Groq');
         }
-      );
-
-      const text = chatCompletion.choices[0]?.message?.content || '';
-
-      if (!text) {
-        throw new Error('No se recibió respuesta de Groq API');
-      }
+        
+        return responseContent;
+      }, 3); // Reintenta hasta 3 veces
 
       // Extraer JSON de la respuesta
       // Intentar primero extraer de code blocks markdown (```json ... ```)
