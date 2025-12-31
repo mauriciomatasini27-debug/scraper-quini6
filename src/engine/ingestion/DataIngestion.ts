@@ -3,10 +3,14 @@
  * 
  * Responsable de cargar, normalizar y preparar los datos históricos
  * para el análisis estadístico.
+ * 
+ * Incluye validación estricta con Zod para asegurar que todos los números
+ * estén en el rango válido 00-45.
  */
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { z } from 'zod';
 import { ResultadoScraping, SorteoQuini6, ModalidadSorteo as ModalidadScraping } from '../../types';
 import {
   SorteoNormalizado,
@@ -14,6 +18,29 @@ import {
   Combinacion,
   NumeroQuini
 } from '../types';
+
+/**
+ * Schema de validación Zod para números del Quini 6
+ * Rango válido: 0-45 (inclusive)
+ */
+const NumeroQuiniSchema = z.number().int().min(0).max(45);
+
+/**
+ * Schema de validación para una combinación completa (6 números)
+ */
+const CombinacionSchema = z.array(NumeroQuiniSchema).length(6);
+
+/**
+ * Schema de validación para los números de un sorteo
+ */
+const NumerosSorteoSchema = z.object({
+  numero1: z.string(),
+  numero2: z.string(),
+  numero3: z.string(),
+  numero4: z.string(),
+  numero5: z.string(),
+  numero6: z.string()
+});
 
 /**
  * Clase principal para la ingesta de datos
@@ -110,31 +137,78 @@ export class DataIngestion {
 
   /**
    * Extrae los números de un objeto NumerosSorteo y los convierte a números
+   * Valida estrictamente con Zod que todos los números estén en el rango 00-45
+   * 
+   * @throws {z.ZodError} Si algún número está fuera del rango válido
    */
   private extraerNumeros(numeros: { numero1: string; numero2: string; numero3: string; numero4: string; numero5: string; numero6: string }): NumeroQuini[] {
+    // Validar estructura con Zod
+    const numerosValidados = NumerosSorteoSchema.parse(numeros);
+    
     const numerosArray: NumeroQuini[] = [];
     
     const valores = [
-      numeros.numero1,
-      numeros.numero2,
-      numeros.numero3,
-      numeros.numero4,
-      numeros.numero5,
-      numeros.numero6
+      numerosValidados.numero1,
+      numerosValidados.numero2,
+      numerosValidados.numero3,
+      numerosValidados.numero4,
+      numerosValidados.numero5,
+      numerosValidados.numero6
     ];
     
-    for (const valor of valores) {
-      if (valor) {
-        const numero = parseInt(valor, 10);
-        // Aceptar números del 0-45 (dominio recalibrado)
-        if (!isNaN(numero) && numero >= 0 && numero <= 45) {
-          numerosArray.push(numero);
+    // Validar y convertir cada número con Zod
+    for (let i = 0; i < valores.length; i++) {
+      const valor = valores[i];
+      if (!valor) {
+        throw new z.ZodError([
+          {
+            code: z.ZodIssueCode.invalid_type,
+            expected: z.ZodParsedType.string,
+            received: z.ZodParsedType.undefined,
+            path: [`numero${i + 1}`],
+            message: `Número ${i + 1} está vacío o es undefined`
+          }
+        ]);
+      }
+
+      const numero = parseInt(valor, 10);
+      
+      // Validar con Zod que el número esté en el rango válido
+      try {
+        const numeroValidado = NumeroQuiniSchema.parse(numero);
+        numerosArray.push(numeroValidado);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          throw new z.ZodError([
+            {
+              code: z.ZodIssueCode.custom,
+              path: [`numero${i + 1}`],
+              message: `Número inválido: ${valor}. Debe estar en el rango 00-45 (inclusive).`
+            }
+          ]);
         }
+        throw error;
       }
     }
 
+    // Validar que tengamos exactamente 6 números y que sea una combinación válida
+    try {
+      CombinacionSchema.parse(numerosArray);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new z.ZodError([
+          {
+            code: z.ZodIssueCode.custom,
+            path: [],
+            message: `Combinación inválida: debe tener exactamente 6 números en el rango 00-45. Números recibidos: ${numerosArray.join(', ')}`
+          }
+        ]);
+      }
+      throw error;
+    }
+
     // Ordenar números de menor a mayor
-    return numerosArray.sort((a, b) => a - b);
+    return numerosArray.sort((a, b) => a - b) as Combinacion;
   }
 
   /**

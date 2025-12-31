@@ -86,6 +86,29 @@ export class HeuristicFilters {
       }
     }
 
+    // Filtro de entropía (Shannon) - Protocolo Lyra
+    if (filtros.entropia) {
+      const antes = combinacionesFiltradas.length;
+      combinacionesFiltradas = combinacionesFiltradas.filter(c => 
+        this.entropyFilter.esValida(c, 1.2) // 1.2 es un umbral conservador
+      );
+      if (combinacionesFiltradas.length < antes) {
+        criteriosAplicados.push('Entropía (Shannon)');
+      }
+    }
+
+    // Filtro de amplitud
+    if (filtros.amplitud) {
+      const antes = combinacionesFiltradas.length;
+      combinacionesFiltradas = this.filtrarPorAmplitud(
+        combinacionesFiltradas,
+        filtros.amplitud
+      );
+      if (combinacionesFiltradas.length < antes) {
+        criteriosAplicados.push('Amplitud');
+      }
+    }
+
     const combinacionesFiltradasCount = combinaciones.length - combinacionesFiltradas.length;
     const porcentajeReduccion = combinaciones.length > 0
       ? (combinacionesFiltradasCount / combinaciones.length) * 100
@@ -241,22 +264,16 @@ export class HeuristicFilters {
 
   /**
    * Filtra combinaciones por entropía de Shannon
+   * @deprecated Usar directamente entropyFilter.esValida() en lugar de este método
+   * Se mantiene por compatibilidad pero ya no se usa en aplicarFiltros()
    */
   private filtrarPorEntropia(
     combinaciones: Combinacion[],
     filtro: NonNullable<FiltrosHeuristicos['entropia']>,
     analisis?: AnalisisEstadistico
   ): Combinacion[] {
-    const umbralMinimo = filtro.umbralMinimo ?? 0.3;
-    const umbralMaximo = filtro.umbralMaximo ?? 0.9;
-    const frecuencias = analisis?.frecuencias;
-
-    return this.entropyFilter.filtrarPorEntropia(
-      combinaciones,
-      umbralMinimo,
-      umbralMaximo,
-      frecuencias
-    );
+    // Usar el método simplificado esValida() con umbral conservador
+    return combinaciones.filter(c => this.entropyFilter.esValida(c, 1.2));
   }
 
   /**

@@ -4,11 +4,14 @@
  * Implementa algoritmos de generación de Sistemas Reducidos.
  * Dado un set de números elegidos, genera el mínimo de combinaciones
  * necesarias para garantizar un acierto de 4 si salen 5 números del set.
+ * 
+ * Optimizado con p-limit para manejar grandes volúmenes (>10,000 combinaciones)
  */
 
 import { NumeroQuini, Combinacion, EstadisticaFrecuencia } from '../types';
 import { CoOccurrenceEngine } from '../cooccurrence/CoOccurrenceEngine';
 import { EntropyFilter } from '../filters/EntropyFilter';
+import pLimit from 'p-limit';
 
 /**
  * Resultado de un sistema reducido
@@ -66,14 +69,14 @@ export class WheelingEngine {
    * @param numerosBase Array de números elegidos (debe tener al menos 6 números)
    * @returns Sistema reducido con combinaciones mínimas
    */
-  public generarSistemaReducido(numerosBase: NumeroQuini[]): SistemaReducido {
+  public async generarSistemaReducido(numerosBase: NumeroQuini[]): Promise<SistemaReducido> {
     if (numerosBase.length < 6) {
       throw new Error('Se necesitan al menos 6 números para generar un sistema reducido');
     }
 
     // Para garantizar 4 aciertos cuando salen 5, necesitamos cubrir
     // todas las combinaciones de 4 números del set
-    const combinaciones = this.generarCoberturaMinima(numerosBase, 4, 5);
+    const combinaciones = await this.generarCoberturaMinima(numerosBase, 4, 5);
 
     return {
       numerosBase: [...numerosBase].sort((a, b) => a - b),
@@ -89,41 +92,70 @@ export class WheelingEngine {
 
   /**
    * Genera una cobertura mínima usando algoritmo greedy
+   * Optimizado con p-limit para grandes volúmenes (>10,000 combinaciones)
    * 
    * @param numerosBase Números base
    * @param tamanoCombinacion Tamaño de cada combinación (6 para Quini)
    * @param numerosQueDebenSalir Cuántos números del set deben salir
    */
-  private generarCoberturaMinima(
+  private async generarCoberturaMinima(
     numerosBase: NumeroQuini[],
     aciertosRequeridos: number,
     numerosQueDebenSalir: number
-  ): Combinacion[] {
+  ): Promise<Combinacion[]> {
     // Generar todas las combinaciones de 'aciertosRequeridos' números del set
     const combinacionesObjetivo = this.combinaciones(numerosBase, aciertosRequeridos);
     
     const combinacionesGeneradas: Combinacion[] = [];
     const combinacionesCubiertas = new Set<string>();
 
+    // Generar todas las combinaciones posibles de 6 números del set
+    const todasCombinaciones = this.combinaciones(numerosBase, 6);
+    const totalCombinaciones = todasCombinaciones.length;
+
+    // Si hay más de 10,000 combinaciones, usar p-limit para controlar concurrencia
+    const usarLimitador = totalCombinaciones > 10000;
+    const limitador = usarLimitador ? pLimit(50) : null; // Limitar a 50 operaciones concurrentes
+
     // Algoritmo greedy: mientras haya combinaciones sin cubrir
     while (combinacionesCubiertas.size < combinacionesObjetivo.length) {
       let mejorCombinacion: NumeroQuini[] | null = null;
       let maxCobertura = 0;
 
-      // Generar todas las combinaciones posibles de 6 números del set
-      const todasCombinaciones = this.combinaciones(numerosBase, 6);
-
-      for (const combinacion of todasCombinaciones) {
-        // Contar cuántas combinaciones objetivo cubre esta combinación
-        const cobertura = this.contarCobertura(
-          combinacion,
-          combinacionesObjetivo,
-          combinacionesCubiertas
+      if (usarLimitador && limitador) {
+        // Usar p-limit para procesar en paralelo con límite
+        const tareas = todasCombinaciones.map(combinacion => 
+          limitador(async () => {
+            const cobertura = this.contarCobertura(
+              combinacion,
+              combinacionesObjetivo,
+              combinacionesCubiertas
+            );
+            return { combinacion, cobertura };
+          })
         );
 
-        if (cobertura > maxCobertura) {
-          maxCobertura = cobertura;
-          mejorCombinacion = combinacion;
+        const resultados = await Promise.all(tareas);
+        
+        for (const resultado of resultados) {
+          if (resultado.cobertura > maxCobertura) {
+            maxCobertura = resultado.cobertura;
+            mejorCombinacion = resultado.combinacion;
+          }
+        }
+      } else {
+        // Procesamiento secuencial para volúmenes pequeños
+        for (const combinacion of todasCombinaciones) {
+          const cobertura = this.contarCobertura(
+            combinacion,
+            combinacionesObjetivo,
+            combinacionesCubiertas
+          );
+
+          if (cobertura > maxCobertura) {
+            maxCobertura = cobertura;
+            mejorCombinacion = combinacion;
+          }
         }
       }
 
@@ -203,19 +235,20 @@ export class WheelingEngine {
    * 
    * Versión más eficiente que usa técnicas de optimización combinatoria
    * Ahora usa pesos de priorización (Protocolo Lyra Fase 2)
+   * Optimizado con p-limit para grandes volúmenes
    */
-  public generarSistemaReducidoOptimizado(
+  public async generarSistemaReducidoOptimizado(
     numerosBase: NumeroQuini[],
     maxCombinaciones: number = 20,
     pesos?: PesosPriorizacion
-  ): SistemaReducido {
+  ): Promise<SistemaReducido> {
     if (numerosBase.length < 6) {
       throw new Error('Se necesitan al menos 6 números');
     }
 
     // Si el set es pequeño, usar método completo
     if (numerosBase.length <= 10) {
-      const sistema = this.generarSistemaReducido(numerosBase);
+      const sistema = await this.generarSistemaReducido(numerosBase);
       
       // Si hay pesos, reordenar por priorización
       if (pesos && (this.coOccurrenceEngine || this.frecuencias)) {
@@ -232,7 +265,7 @@ export class WheelingEngine {
     }
 
     // Para sets grandes, usar método heurístico con priorización
-    const combinaciones = this.generarCoberturaHeuristica(numerosBase, maxCombinaciones, pesos);
+    const combinaciones = await this.generarCoberturaHeuristica(numerosBase, maxCombinaciones, pesos);
 
     return {
       numerosBase: [...numerosBase].sort((a, b) => a - b),
@@ -322,50 +355,69 @@ export class WheelingEngine {
 
   /**
    * Genera cobertura usando heurística para sets grandes
+   * Optimizado con p-limit para grandes volúmenes
    */
-  private generarCoberturaHeuristica(
+  private async generarCoberturaHeuristica(
     numerosBase: NumeroQuini[],
     maxCombinaciones: number,
     pesos?: PesosPriorizacion
-  ): Combinacion[] {
+  ): Promise<Combinacion[]> {
     const combinaciones: Combinacion[] = [];
     const numerosOrdenados = [...numerosBase].sort((a, b) => a - b);
 
     // Estrategia: Distribuir los números de manera balanceada
     // Crear combinaciones que maximicen la diversidad
 
+    // Si maxCombinaciones es grande, usar p-limit para optimizar
+    const usarLimitador = maxCombinaciones > 10000;
+    const limitador = usarLimitador ? pLimit(100) : null; // Más permisivo para heurística
+
+    const tareasGeneracion = [];
     for (let i = 0; i < maxCombinaciones && combinaciones.length < maxCombinaciones; i++) {
-      const combinacion: NumeroQuini[] = [];
-      const numerosUsados = new Set<NumeroQuini>();
+      const tarea = (async () => {
+        const combinacion: NumeroQuini[] = [];
+        const numerosUsados = new Set<NumeroQuini>();
 
-      // Seleccionar números de manera distribuida
-      const paso = Math.max(1, Math.floor(numerosOrdenados.length / 6));
-      
-      for (let j = 0; j < 6 && combinacion.length < 6; j++) {
-        const indice = (i * paso + j) % numerosOrdenados.length;
-        const numero = numerosOrdenados[indice];
+        // Seleccionar números de manera distribuida
+        const paso = Math.max(1, Math.floor(numerosOrdenados.length / 6));
         
-        if (!numerosUsados.has(numero)) {
-          combinacion.push(numero);
-          numerosUsados.add(numero);
-        }
-      }
-
-      // Completar si faltan números
-      if (combinacion.length < 6) {
-        for (const num of numerosOrdenados) {
-          if (!numerosUsados.has(num) && combinacion.length < 6) {
-            combinacion.push(num);
-            numerosUsados.add(num);
+        for (let j = 0; j < 6 && combinacion.length < 6; j++) {
+          const indice = (i * paso + j) % numerosOrdenados.length;
+          const numero = numerosOrdenados[indice];
+          
+          if (!numerosUsados.has(numero)) {
+            combinacion.push(numero);
+            numerosUsados.add(numero);
           }
         }
-      }
 
-      if (combinacion.length === 6) {
-        combinacion.sort((a, b) => a - b);
-        combinaciones.push(combinacion as Combinacion);
+        // Completar si faltan números
+        if (combinacion.length < 6) {
+          for (const num of numerosOrdenados) {
+            if (!numerosUsados.has(num) && combinacion.length < 6) {
+              combinacion.push(num);
+              numerosUsados.add(num);
+            }
+          }
+        }
+
+        if (combinacion.length === 6) {
+          combinacion.sort((a, b) => a - b);
+          return combinacion as Combinacion;
+        }
+        return null;
+      })();
+
+      if (usarLimitador && limitador) {
+        tareasGeneracion.push(limitador(tarea));
+      } else {
+        tareasGeneracion.push(tarea);
       }
     }
+
+    const resultados = await Promise.all(tareasGeneracion);
+    const combinacionesValidas = resultados.filter((c): c is Combinacion => c !== null);
+    combinaciones.push(...combinacionesValidas);
 
     // Si hay pesos de priorización, ordenar y seleccionar las mejores
     if (pesos && (this.coOccurrenceEngine || this.frecuencias)) {
@@ -383,7 +435,7 @@ export class WheelingEngine {
         .map(item => item.combinacion);
     }
 
-    return combinaciones;
+    return combinaciones.slice(0, maxCombinaciones);
   }
 
   /**

@@ -19,14 +19,14 @@ async function ejecutarAnalisisJuezFinal() {
   console.log('⚖️  ANÁLISIS CON JUEZ FINAL (AI PREDICTOR)\n');
   console.log('='.repeat(70));
   console.log('🧠 El Juez Final evaluará las combinaciones candidatas');
-  console.log('   usando Grok AI (xAI) para seleccionar las 3 mejores\n');
+  console.log('   usando Groq AI para seleccionar las 3 mejores\n');
   console.log('='.repeat(70) + '\n');
 
   // Verificar API key
-  const apiKey = process.env.GROK_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    console.error('❌ Error: GROK_API_KEY no está configurada en .env');
-    console.log('   Por favor, agrega GROK_API_KEY=tu_api_key en tu archivo .env\n');
+    console.error('❌ Error: GROQ_API_KEY no está configurada en .env');
+    console.log('   Por favor, agrega GROQ_API_KEY=tu_api_key en tu archivo .env\n');
     process.exit(1);
   }
 
@@ -87,7 +87,7 @@ async function ejecutarAnalisisJuezFinal() {
     frecuencia: 0.113
   };
 
-  const sistema = wheelingEngine.generarSistemaReducidoOptimizado(
+  const sistema = await wheelingEngine.generarSistemaReducidoOptimizado(
     numerosOptimizados, 
     15, 
     pesosOptimizados
@@ -105,7 +105,7 @@ async function ejecutarAnalisisJuezFinal() {
   }
 
   // 4. Juez Final
-  console.log('⚖️  4. JUEZ FINAL - EVALUANDO CON GROK AI...\n');
+  console.log('⚖️  4. JUEZ FINAL - EVALUANDO CON GROQ AI...\n');
   
   const aiPredictor = new AIPredictor(apiKey);
 
@@ -162,7 +162,7 @@ async function ejecutarAnalisisJuezFinal() {
 
     return {
       top3: top3Fallback,
-      analisisTecnico: 'Fallback: Error al obtener veredicto de Grok. Usando top 3 por score estadístico.',
+      analisisTecnico: 'Fallback: Error al obtener veredicto de Groq. Usando top 3 por score estadístico.',
       razones: ['Seleccionadas por score de priorización', 'Basadas en análisis estadístico local']
     };
   }

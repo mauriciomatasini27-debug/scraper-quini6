@@ -1,10 +1,16 @@
 /**
  * Cliente para guardar datos en Supabase
  * Requiere SUPABASE_URL y SUPABASE_KEY en variables de entorno
+ * 
+ * Incluye sistema de retry con backoff exponencial para mayor resiliencia.
  */
+
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 import { ResultadoScraping, SorteoQuini6 } from './types';
 import { VeredictoJuezFinal } from './engine/types';
+import { withRetry, RetryConfig } from './utils/retry';
 
 interface SupabaseConfig {
   url: string;
@@ -117,22 +123,34 @@ export async function guardarEnSupabaseBatch(resultado: ResultadoScraping): Prom
       fecha_extraccion: resultado.metadata.fechaExtraccion
     }));
 
-    // Usar UPSERT para evitar duplicados
-    const response = await fetch(`${config.url}/rest/v1/sorteos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': config.key,
-        'Authorization': `Bearer ${config.key}`,
-        'Prefer': 'return=minimal,resolution=merge-duplicates'
-      },
-      body: JSON.stringify(sorteosParaInsertar)
-    });
+    // Usar UPSERT para evitar duplicados con retry
+    const response = await withRetry(
+      async () => {
+        const res = await fetch(`${config.url}/rest/v1/sorteos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': config.key,
+            'Authorization': `Bearer ${config.key}`,
+            'Prefer': 'return=minimal,resolution=merge-duplicates'
+          },
+          body: JSON.stringify(sorteosParaInsertar)
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Supabase error: ${response.status} - ${errorText}`);
-    }
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Supabase error: ${res.status} - ${errorText}`);
+        }
+
+        return res;
+      },
+      {
+        ...RetryConfig.supabase,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️  Reintento ${attempt} de ${RetryConfig.supabase.maxRetries} para Supabase (batch): ${error.message}`);
+        }
+      }
+    );
 
     console.log('✅ Resultados guardados en Supabase exitosamente (batch)');
     return true;
@@ -210,23 +228,34 @@ export async function logAIVeredicto(
       created_at: new Date().toISOString()
     };
 
-    // Insertar en Supabase
-    const response = await fetch(`${config.url}/rest/v1/ai_predictions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': config.key,
-        'Authorization': `Bearer ${config.key}`,
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify(datosPrediccion)
-    });
+    // Insertar en Supabase con retry
+    const response = await withRetry(
+      async () => {
+        const res = await fetch(`${config.url}/rest/v1/ai_predictions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': config.key,
+            'Authorization': `Bearer ${config.key}`,
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify(datosPrediccion)
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Error al guardar veredicto de IA: ${response.status} - ${errorText}`);
-      return false;
-    }
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Supabase error: ${res.status} - ${errorText}`);
+        }
+
+        return res;
+      },
+      {
+        ...RetryConfig.supabase,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️  Reintento ${attempt} de ${RetryConfig.supabase.maxRetries} para guardar veredicto de IA: ${error.message}`);
+        }
+      }
+    );
 
     const resultado = await response.json();
     console.log(`✅ Veredicto de IA guardado exitosamente (ID: ${resultado[0]?.id || 'N/A'})`);
@@ -266,28 +295,39 @@ export async function actualizarResultadoReal(
       ? fechaSorteo.toISOString().split('T')[0] 
       : fechaSorteo;
 
-    // Actualizar el registro
-    const response = await fetch(
-      `${config.url}/rest/v1/ai_predictions?fecha_sorteo=eq.${fechaFormateada}`,
+    // Actualizar el registro con retry
+    const response = await withRetry(
+      async () => {
+        const res = await fetch(
+          `${config.url}/rest/v1/ai_predictions?fecha_sorteo=eq.${fechaFormateada}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': config.key,
+              'Authorization': `Bearer ${config.key}`,
+              'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+              resultado_real: resultadoReal
+            })
+          }
+        );
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`Supabase error: ${res.status} - ${errorText}`);
+        }
+
+        return res;
+      },
       {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': config.key,
-          'Authorization': `Bearer ${config.key}`,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          resultado_real: resultadoReal
-        })
+        ...RetryConfig.supabase,
+        onRetry: (attempt, error) => {
+          console.warn(`⚠️  Reintento ${attempt} de ${RetryConfig.supabase.maxRetries} para actualizar resultado real: ${error.message}`);
+        }
       }
     );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ Error al actualizar resultado real: ${response.status} - ${errorText}`);
-      return false;
-    }
 
     console.log(`✅ Resultado real actualizado para fecha ${fechaFormateada}`);
     return true;

@@ -13,6 +13,9 @@
  * - AI Predictor (Juez Final - Protocolo Lyra)
  */
 
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { DataIngestion } from './ingestion/DataIngestion';
 import { StatisticalCore } from './statistical/StatisticalCore';
 import { MarkovChainEngine } from './markov/MarkovChainEngine';
@@ -183,8 +186,8 @@ export class MotorProbabilidades {
         frecuencia: 0.113
       };
 
-      // Generar sistema reducido
-      const sistema = this.wheelingEngine.generarSistemaReducidoOptimizado(
+      // Generar sistema reducido (ahora async con optimización p-limit)
+      const sistema = await this.wheelingEngine.generarSistemaReducidoOptimizado(
         numerosSeleccionados,
         20, // Máximo 20 combinaciones candidatas
         pesosOptimizados
@@ -197,7 +200,7 @@ export class MotorProbabilidades {
 
       // 10. Juez Final (AI Predictor)
       try {
-        const apiKey = process.env.GROK_API_KEY;
+        const apiKey = process.env.GROQ_API_KEY;
         if (apiKey) {
           const predictorIA = new AIPredictor(apiKey);
           
@@ -246,7 +249,7 @@ export class MotorProbabilidades {
             // No fallar el proceso si falla el guardado en Supabase
           }
         } else {
-          console.log('[Motor] ⚠️  GROK_API_KEY no configurada, omitiendo Juez Final');
+          console.log('[Motor] ⚠️  GROQ_API_KEY no configurada, omitiendo Juez Final');
         }
       } catch (error) {
         console.log(`[Motor] ⚠️  Error en Juez Final: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -316,9 +319,9 @@ export class MotorProbabilidades {
       console.log('⚠️  JUEZ FINAL NO DISPONIBLE\n');
       console.log('   El Juez Final (AI Predictor) no pudo generar un veredicto.');
       console.log('   Posibles razones:');
-      console.log('   - GROK_API_KEY no configurada');
+      console.log('   - GROQ_API_KEY no configurada');
       console.log('   - Cuota de API excedida');
-      console.log('   - Error en la conexión con Grok\n');
+      console.log('   - Error en la conexión con Groq\n');
       
       // Mostrar top 3 por score estadístico como fallback
       console.log('📊 TOP 3 COMBINACIONES (Por Score Estadístico - Fallback):\n');

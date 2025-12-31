@@ -2,11 +2,15 @@
  * AI Predictor - Juez Final
  * 
  * Este módulo actúa como el "cerebro" que toma la decisión final
- * sobre las combinaciones candidatas, usando Grok AI (xAI)
+ * sobre las combinaciones candidatas, usando Groq AI
  * para evaluar coherencia orgánica y seleccionar las mejores opciones.
+ * 
+ * Incluye sistema de retry con backoff exponencial para mayor resiliencia.
  */
 
+import { Groq } from 'groq-sdk';
 import { Combinacion, AnalisisEstadistico, NumeroQuini, EstadisticaFrecuencia } from '../types';
+import { withRetry, RetryConfig } from '../../utils/retry';
 
 /**
  * Resultado del veredicto final del AI Predictor
@@ -50,17 +54,18 @@ export interface ResumenEstadistico {
  * Clase principal del Juez Final (AI Predictor)
  */
 export class AIPredictor {
-  private apiKey: string;
-  private apiUrl: string = 'https://api.x.ai/v1/chat/completions';
-  private model: string = 'grok-beta';
+  private groq: Groq;
+  private model: string = 'llama-3.3-70b-versatile'; // Modelo actual de Groq (si no está disponible, intentar: llama-3.1-8b-instant, mixtral-8x7b-32768)
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.GROK_API_KEY;
+    const key = apiKey || process.env.GROQ_API_KEY;
     if (!key) {
-      throw new Error('Falta GROK_API_KEY en el .env. Agrega GROK_API_KEY=tu_api_key');
+      throw new Error('Falta GROQ_API_KEY en el .env. Agrega GROQ_API_KEY=tu_api_key');
     }
 
-    this.apiKey = key;
+    this.groq = new Groq({
+      apiKey: key
+    });
   }
 
   /**
@@ -132,15 +137,9 @@ IMPORTANTE:
 `;
 
     try {
-      // Llamar a Grok API
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: this.model,
+      // Llamar a Groq API con retry y backoff exponencial
+      const chatCompletion = await withRetry(
+        () => this.groq.chat.completions.create({
           messages: [
             {
               role: 'system',
@@ -151,30 +150,52 @@ IMPORTANTE:
               content: prompt
             }
           ],
-          temperature: 0.7,
-          max_tokens: 2000
-        })
-      });
+          model: this.model,
+          temperature: 0.6,
+          max_tokens: 4096,
+          top_p: 0.95,
+          stream: false
+        }),
+        {
+          ...RetryConfig.groq,
+          onRetry: (attempt, error) => {
+            console.warn(`⚠️  Reintento ${attempt} de ${RetryConfig.groq.maxRetries} para Groq API: ${error.message}`);
+          }
+        }
+      );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText }));
-        throw new Error(`Grok API error: ${response.status} - ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || '';
+      const text = chatCompletion.choices[0]?.message?.content || '';
 
       if (!text) {
-        throw new Error('No se recibió respuesta de Grok API');
+        throw new Error('No se recibió respuesta de Groq API');
       }
 
       // Extraer JSON de la respuesta
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No se pudo extraer JSON de la respuesta de Grok');
+      // Intentar primero extraer de code blocks markdown (```json ... ```)
+      let jsonText = '';
+      const codeBlockMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        jsonText = codeBlockMatch[1];
+      } else {
+        // Si no hay code block, buscar directamente el JSON
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonText = jsonMatch[0];
+        }
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      if (!jsonText) {
+        console.warn('⚠️  Respuesta completa de Groq:', text.substring(0, 500));
+        throw new Error('No se pudo extraer JSON de la respuesta de Groq');
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonText);
+      } catch (parseError) {
+        console.warn('⚠️  Error al parsear JSON. Texto extraído:', jsonText.substring(0, 500));
+        throw new Error(`Error al parsear JSON de Groq: ${parseError instanceof Error ? parseError.message : 'Error desconocido'}`);
+      }
 
       // Validar y convertir las combinaciones
       const top3: Combinacion[] = [];
@@ -197,7 +218,7 @@ IMPORTANTE:
 
       // Si no se pudieron extraer 3 válidas, usar las primeras candidatas
       if (top3.length < 3 && candidatas.length >= 3) {
-        console.warn('⚠️  Grok no devolvió 3 combinaciones válidas, usando top 3 candidatas');
+        console.warn('⚠️  Groq no devolvió 3 combinaciones válidas, usando top 3 candidatas');
         top3.push(...candidatas.slice(0, 3 - top3.length));
       }
 
@@ -221,16 +242,16 @@ IMPORTANTE:
       }
 
       // Si falla, devolver las top 3 candidatas como fallback
-      console.warn(`⚠️  Error obteniendo veredicto de Grok: ${errorMessage}`);
+      console.warn(`⚠️  Error obteniendo veredicto de Groq: ${errorMessage}`);
       console.warn('   Usando top 3 candidatas como fallback');
       
       return {
         top3: candidatas.slice(0, 3),
-        analisisTecnico: `Fallback: Error al obtener análisis de Grok (${errorMessage}). Usando top 3 candidatas por score estadístico.`,
+        analisisTecnico: `Fallback: Error al obtener análisis de Groq (${errorMessage}). Usando top 3 candidatas por score estadístico.`,
         razones: [
           'Seleccionadas por score de priorización',
           'Basadas en análisis estadístico local',
-          'Fallback debido a error en API de Grok'
+          'Fallback debido a error en API de Groq'
         ]
       };
     }
