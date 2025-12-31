@@ -11,6 +11,7 @@ import { CoOccurrenceEngine } from './cooccurrence/CoOccurrenceEngine';
 import { WheelingEngine, PesosPriorizacion } from './wheeling/WheelingEngine';
 import { DataIngestion } from './ingestion/DataIngestion';
 import { StatisticalCore } from './statistical/StatisticalCore';
+import { logAIVeredicto } from '../supabase-client';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -140,6 +141,37 @@ async function ejecutarAnalisisJuezFinal() {
       veredicto.razones.forEach((razon, idx) => {
         console.log(`   ${idx + 1}. ${razon}\n`);
       });
+    }
+
+    console.log('='.repeat(70));
+    
+    // 5. Guardar en Supabase
+    console.log('\n💾 5. GUARDANDO PREDICCIÓN EN SUPABASE...\n');
+    const fechaSorteo = new Date();
+    
+    // Convertir VeredictoFinal a formato compatible con logAIVeredicto
+    // logAIVeredicto espera VeredictoJuezFinal que tiene timestamp como Date
+    const veredictoParaGuardar = {
+      top3: veredicto.top3,
+      analisisTecnico: veredicto.analisisTecnico,
+      razones: veredicto.razones,
+      timestamp: new Date()
+    };
+    
+    const guardado = await logAIVeredicto(
+      veredictoParaGuardar,
+      fechaSorteo,
+      undefined, // numeroSorteo será null para predicciones futuras
+      {
+        totalCombinacionesEvaluadas: sistema.combinaciones.length,
+        timestamp: new Date().toISOString()
+      }
+    );
+
+    if (guardado) {
+      console.log('✅ Predicción guardada exitosamente en Supabase\n');
+    } else {
+      console.log('⚠️  No se pudo guardar en Supabase (puede que no esté configurado)\n');
     }
 
     console.log('='.repeat(70));

@@ -100,7 +100,7 @@ async function ejemploModulosAvanzados() {
   console.log(`   Números base (${numerosBase.length}): ${numerosBase.map(n => n.toString().padStart(2, '0')).join(', ')}\n`);
   
   try {
-    const sistema = wheelingEngine.generarSistemaReducidoOptimizado(numerosBase, 15);
+    const sistema = await wheelingEngine.generarSistemaReducidoOptimizado(numerosBase, 15);
     
     console.log(`   ✓ Sistema generado: ${sistema.totalCombinaciones} combinaciones\n`);
     console.log(`   Garantía: ${sistema.garantia.garantiaAciertos} aciertos si salen ${sistema.garantia.numerosQueDebenSalir} del set\n`);

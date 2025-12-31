@@ -11,7 +11,7 @@
 -- ============================================================
 
 -- Crear la tabla principal
-CREATE TABLE IF NOT EXISTS resultados_quini (
+CREATE TABLE IF NOT EXISTS public.resultados_quini (
   id BIGSERIAL PRIMARY KEY,
   sorteo_numero INTEGER UNIQUE NOT NULL,
   fecha DATE NOT NULL,
@@ -24,29 +24,33 @@ CREATE TABLE IF NOT EXISTS resultados_quini (
   pozo_extra JSONB,
   url TEXT,
   extraido_en TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT pg_catalog.now(),
+  updated_at TIMESTAMPTZ DEFAULT pg_catalog.now()
 );
 
 -- Crear índices para mejorar el rendimiento de consultas
-CREATE INDEX IF NOT EXISTS idx_resultados_quini_sorteo_numero ON resultados_quini(sorteo_numero);
-CREATE INDEX IF NOT EXISTS idx_resultados_quini_fecha ON resultados_quini(fecha);
-CREATE INDEX IF NOT EXISTS idx_resultados_quini_año ON resultados_quini(año);
+CREATE INDEX IF NOT EXISTS idx_resultados_quini_sorteo_numero ON public.resultados_quini(sorteo_numero);
+CREATE INDEX IF NOT EXISTS idx_resultados_quini_fecha ON public.resultados_quini(fecha);
+CREATE INDEX IF NOT EXISTS idx_resultados_quini_año ON public.resultados_quini(año);
 
 -- Crear función para actualizar updated_at automáticamente
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+-- Con search_path explícito para seguridad
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
 BEGIN
-  NEW.updated_at = NOW();
+  NEW.updated_at = pg_catalog.now();
   RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$;
 
 -- Crear trigger para actualizar updated_at en cada UPDATE
 CREATE TRIGGER update_resultados_quini_updated_at 
-  BEFORE UPDATE ON resultados_quini 
+  BEFORE UPDATE ON public.resultados_quini 
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================================
 -- Verificar que la tabla se creó correctamente
@@ -57,7 +61,7 @@ SELECT
   data_type,
   is_nullable
 FROM information_schema.columns
-WHERE table_name = 'resultados_quini'
+WHERE table_schema = 'public' AND table_name = 'resultados_quini'
 ORDER BY ordinal_position;
 
 

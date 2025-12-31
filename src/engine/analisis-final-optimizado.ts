@@ -81,7 +81,7 @@ async function ejecutarAnalisisFinalOptimizado() {
   const wheelingEngine = new WheelingEngine();
   wheelingEngine.configurarPriorizacion(coOccurrenceEngine, analisis.frecuencias);
   
-  const sistema = wheelingEngine.generarSistemaReducidoOptimizado(numerosOptimizados, 10, pesosOptimizados);
+  const sistema = await wheelingEngine.generarSistemaReducidoOptimizado(numerosOptimizados, 10, pesosOptimizados);
 
   console.log('✨ COMBINACIONES OPTIMIZADAS (Top 10)\n');
   console.log('='.repeat(70) + '\n');

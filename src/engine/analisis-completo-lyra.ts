@@ -164,7 +164,7 @@ async function ejecutarAnalisisCompletoLyra() {
   const numerosBase = [...numerosTop5, 12, 15, 20, 25, 30, 35, 40];
   
   try {
-    const sistema = wheelingEngine.generarSistemaReducidoOptimizado(numerosBase, 5, pesos);
+    const sistema = await wheelingEngine.generarSistemaReducidoOptimizado(numerosBase, 5, pesos);
     
     console.log(`   Números base (${numerosBase.length}): ${numerosBase.map(n => n.toString().padStart(2, '0')).join(', ')}\n`);
     console.log(`   Sistema generado: ${sistema.totalCombinaciones} combinaciones\n`);

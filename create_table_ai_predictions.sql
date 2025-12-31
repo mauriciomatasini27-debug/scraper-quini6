@@ -11,7 +11,7 @@
 -- ============================================================
 
 -- Crear la tabla para almacenar predicciones de IA
-CREATE TABLE IF NOT EXISTS ai_predictions (
+CREATE TABLE IF NOT EXISTS public.ai_predictions (
   id BIGSERIAL PRIMARY KEY,
   fecha_sorteo DATE NOT NULL,
   numero_sorteo INTEGER,
@@ -25,21 +25,25 @@ CREATE TABLE IF NOT EXISTS ai_predictions (
   aciertos_combinacion_1 INTEGER DEFAULT 0,
   aciertos_combinacion_2 INTEGER DEFAULT 0,
   aciertos_combinacion_3 INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT pg_catalog.now(),
+  updated_at TIMESTAMPTZ DEFAULT pg_catalog.now()
 );
 
 -- Crear índices para mejorar el rendimiento de consultas
-CREATE INDEX IF NOT EXISTS idx_ai_predictions_fecha_sorteo ON ai_predictions(fecha_sorteo);
-CREATE INDEX IF NOT EXISTS idx_ai_predictions_numero_sorteo ON ai_predictions(numero_sorteo);
-CREATE INDEX IF NOT EXISTS idx_ai_predictions_created_at ON ai_predictions(created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_predictions_fecha_sorteo ON public.ai_predictions(fecha_sorteo);
+CREATE INDEX IF NOT EXISTS idx_ai_predictions_numero_sorteo ON public.ai_predictions(numero_sorteo);
+CREATE INDEX IF NOT EXISTS idx_ai_predictions_created_at ON public.ai_predictions(created_at);
 
 -- Crear función para calcular aciertos automáticamente
-CREATE OR REPLACE FUNCTION calcular_aciertos(
+-- Con search_path explícito para seguridad
+CREATE OR REPLACE FUNCTION public.calcular_aciertos(
   combinacion_predicha INTEGER[],
   resultado_real INTEGER[]
 )
-RETURNS INTEGER AS $$
+RETURNS INTEGER
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
 DECLARE
   aciertos INTEGER := 0;
   num INTEGER;
@@ -57,34 +61,39 @@ BEGIN
 
   RETURN aciertos;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Crear función para actualizar aciertos cuando se agrega resultado_real
-CREATE OR REPLACE FUNCTION update_aciertos_on_resultado_real()
-RETURNS TRIGGER AS $$
+-- Con search_path explícito para seguridad
+CREATE OR REPLACE FUNCTION public.update_aciertos_on_resultado_real()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
 BEGIN
   IF NEW.resultado_real IS NOT NULL AND (OLD.resultado_real IS NULL OR OLD.resultado_real <> NEW.resultado_real) THEN
-    NEW.aciertos_combinacion_1 := calcular_aciertos(NEW.combinacion_1, NEW.resultado_real);
-    NEW.aciertos_combinacion_2 := calcular_aciertos(NEW.combinacion_2, NEW.resultado_real);
-    NEW.aciertos_combinacion_3 := calcular_aciertos(NEW.combinacion_3, NEW.resultado_real);
+    NEW.aciertos_combinacion_1 := public.calcular_aciertos(NEW.combinacion_1, NEW.resultado_real);
+    NEW.aciertos_combinacion_2 := public.calcular_aciertos(NEW.combinacion_2, NEW.resultado_real);
+    NEW.aciertos_combinacion_3 := public.calcular_aciertos(NEW.combinacion_3, NEW.resultado_real);
   END IF;
   
-  NEW.updated_at = NOW();
+  NEW.updated_at = pg_catalog.now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- Crear trigger para actualizar aciertos automáticamente
 CREATE TRIGGER update_ai_predictions_aciertos
-  BEFORE UPDATE ON ai_predictions
+  BEFORE UPDATE ON public.ai_predictions
   FOR EACH ROW
-  EXECUTE FUNCTION update_aciertos_on_resultado_real();
+  EXECUTE FUNCTION public.update_aciertos_on_resultado_real();
 
 -- Crear trigger para actualizar updated_at en cada UPDATE
+-- Nota: Esta función debe existir (se crea en create_table_resultados_quini.sql)
 CREATE TRIGGER update_ai_predictions_updated_at
-  BEFORE UPDATE ON ai_predictions
+  BEFORE UPDATE ON public.ai_predictions
   FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+  EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================================
 -- Verificar que la tabla se creó correctamente
@@ -95,7 +104,7 @@ SELECT
   data_type,
   is_nullable
 FROM information_schema.columns
-WHERE table_name = 'ai_predictions'
+WHERE table_schema = 'public' AND table_name = 'ai_predictions'
 ORDER BY ordinal_position;
 
 -- ============================================================

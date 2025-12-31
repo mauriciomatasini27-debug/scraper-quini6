@@ -72,7 +72,7 @@ async function analizarYOptimizarScore() {
   console.log(`   - Frecuencia: ${(pesosActuales.frecuencia || 0) * 100}%\n`);
 
   // Generar sistema y analizar
-  const sistema = wheelingEngine.generarSistemaReducidoOptimizado(todosLosNumeros, 10, pesosActuales);
+  const sistema = await wheelingEngine.generarSistemaReducidoOptimizado(todosLosNumeros, 10, pesosActuales);
 
   console.log('   Análisis de componentes por combinación:\n');
   
@@ -241,7 +241,7 @@ async function analizarYOptimizarScore() {
   console.log('✨ 3. COMBINACIONES OPTIMIZADAS (Con mejoras aplicadas)\n');
   
   const numerosOptimizados = [...new Set([...top5Presion.map(e => e.numero), ...numerosMejorAfinidad])].slice(0, 12);
-  const sistemaOptimizado = wheelingEngine.generarSistemaReducidoOptimizado(numerosOptimizados, 5, pesosOptimizados);
+  const sistemaOptimizado = await wheelingEngine.generarSistemaReducidoOptimizado(numerosOptimizados, 5, pesosOptimizados);
 
   console.log(`   Números seleccionados (${numerosOptimizados.length}): ${numerosOptimizados.map(n => n.toString().padStart(2, '0')).join(', ')}\n`);
 
